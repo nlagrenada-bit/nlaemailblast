@@ -8,6 +8,7 @@ import RecipientsView from './views/RecipientsView.jsx';
 import HistoryView from './views/HistoryView.jsx';
 import SettingsView from './views/SettingsView.jsx';
 import SignIn from './views/SignIn.jsx';
+import ResetPassword from './views/ResetPassword.jsx';
 
 const TABS = [
   ['results', 'Results'],
@@ -18,6 +19,7 @@ const TABS = [
 
 export default function App() {
   const [session, setSession] = useState(undefined);   // undefined = still checking
+  const [recovering, setRecovering] = useState(false);   // arrived via a reset link
   const [staff, setStaff] = useState(null);
   const [tab, setTab] = useState('results');
   const [date, setDate] = useState(todayLocal());
@@ -26,7 +28,10 @@ export default function App() {
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => setSession(data.session ?? null));
-    const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => setSession(s));
+    const { data: sub } = supabase.auth.onAuthStateChange((event, s) => {
+      if (event === 'PASSWORD_RECOVERY') setRecovering(true);
+      setSession(s);
+    });
     return () => sub.subscription.unsubscribe();
   }, []);
 
@@ -39,6 +44,9 @@ export default function App() {
   }, [session]);
 
   if (session === undefined) return null;
+  if (recovering) {
+    return <ToastHost><ResetPassword onDone={() => setRecovering(false)} /></ToastHost>;
+  }
   if (!session) return <ToastHost><SignIn /></ToastHost>;
 
   const canSend = ['approver', 'admin'].includes(staff?.role);
