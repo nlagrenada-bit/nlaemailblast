@@ -93,4 +93,4 @@ async function notifyDesk(subject, text) {
   } catch { /* notification failure must not fail the job */ }
 }
 
-export const config = { schedule: '0 1 * * 2-7' };   // 21:00 AST, Mon-Sat
+export const config = { schedule: '0 1 * * 2-6,0' };   // 21:00 AST, Mon-Sat
