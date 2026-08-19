@@ -122,45 +122,45 @@ function dailyPeriodHtml(base, p, dateLong) {
     out += gameCard(base, {
       logoFile: GAMES.play_way.logo, logoWidth: 78, draw: p.playWay.drawNo,
       body: statement(`The Winning Number for the <strong>PLAY WAY ${esc(p.banner)}</strong> Draw:`)
-        + ballRow(base, 'playway', [p.playWay.number], 52, symCell),
+        + ballRow(base, 'playway', [p.playWay.number], 52, symCell)
+        + payout('Payout:', p.playWay.payout),
     });
   }
   if (p.playWay?.multiplier) {
     out += gameCard(base, {
       logoFile: GAMES.multix.logo, logoWidth: 118, draw: p.playWay.drawNo,
       body: statement(`The Winning Ball for the <strong>PLAY WAY Multi-X ${esc(p.banner)}</strong> Draw:`)
-        + ballRow(base, 'multix', [p.playWay.multiplier])
-        + payout('Payout:', p.playWay.payout),
+        + ballRow(base, 'multix', [p.playWay.multiplier]),
     });
   }
   if (p.pick3?.digits?.length) {
     out += gameCard(base, {
       logoFile: GAMES.pick3.logo, logoWidth: 132, draw: p.pick3.drawNo,
       body: statement(`The Winning Numbers for <strong>DAILY PICK 3 ${esc(p.banner)}</strong> Draw:`)
-        + ballRow(base, 'pick3', p.pick3.digits),
+        + ballRow(base, 'pick3', p.pick3.digits)
+        + payout('Payout:', p.pick3.payout),
     });
   }
   if (p.pick3?.multiplier) {
     out += gameCard(base, {
       logoFile: GAMES.multix.logo, logoWidth: 118, draw: p.pick3.drawNo,
       body: statement(`The Winning Ball for the <strong>PICK 3 Multi-X ${esc(p.banner)}</strong> Draw:`)
-        + ballRow(base, 'multix', [p.pick3.multiplier])
-        + payout('Payout:', p.pick3.payout),
+        + ballRow(base, 'multix', [p.pick3.multiplier]),
     });
   }
   if (p.cash4?.digits?.length) {
     out += gameCard(base, {
       logoFile: GAMES.cash4.logo, logoWidth: 132, draw: p.cash4.drawNo,
       body: statement(`The Winning Numbers for <strong>DAILY CASH 4 ${esc(p.banner)}</strong> Draw:`)
-        + ballRow(base, 'cash4', p.cash4.digits),
+        + ballRow(base, 'cash4', p.cash4.digits)
+        + payout('Payout:', p.cash4.payout),
     });
   }
   if (p.cash4?.multiplier) {
     out += gameCard(base, {
       logoFile: GAMES.multix.logo, logoWidth: 118, draw: p.cash4.drawNo,
       body: statement(`The Winning Ball for the <strong>CASH 4 Multi-X ${esc(p.banner)}</strong> Draw:`)
-        + ballRow(base, 'multix', [p.cash4.multiplier])
-        + payout('Payout:', p.cash4.payout),
+        + ballRow(base, 'multix', [p.cash4.multiplier]),
     });
   }
   return out;
@@ -308,32 +308,29 @@ function textPeriod(p, dateLong) {
   if (p.playWay?.number) {
     L.push(`The Winning Number for the PLAY WAY ${p.banner} Draw: ${p.playWay.number}   Symbol: ${symbolFor(p.playWay.number)}`);
     if (p.playWay.drawNo) L.push(`(${drawNo(p.playWay.drawNo)})`);
+    if (p.playWay.payout) L.push(`Payout: ${money(p.playWay.payout)}`);
     L.push('');
   }
   if (p.playWay?.multiplier) {
-    L.push(`The Winning Ball for the PLAY WAY Multi-X ${p.banner} Draw: ${p.playWay.multiplier}`);
-    if (p.playWay.payout) L.push(`Payout: ${money(p.playWay.payout)}`);
-    L.push('');
+    L.push(`The Winning Ball for the PLAY WAY Multi-X ${p.banner} Draw: ${p.playWay.multiplier}`, '');
   }
   if (p.pick3?.digits?.length) {
     L.push(`The Winning Numbers for DAILY PICK 3 ${p.banner} Draw: ${joinDigits(p.pick3.digits)}`);
     if (p.pick3.drawNo) L.push(`(${drawNo(p.pick3.drawNo)})`);
+    if (p.pick3.payout) L.push(`Payout: ${money(p.pick3.payout)}`);
     L.push('');
   }
   if (p.pick3?.multiplier) {
-    L.push(`The Winning Ball for the PICK 3 Multi-X ${p.banner} Draw: ${p.pick3.multiplier}`);
-    if (p.pick3.payout) L.push(`Payout: ${money(p.pick3.payout)}`);
-    L.push('');
+    L.push(`The Winning Ball for the PICK 3 Multi-X ${p.banner} Draw: ${p.pick3.multiplier}`, '');
   }
   if (p.cash4?.digits?.length) {
     L.push(`The Winning Numbers for DAILY CASH 4 ${p.banner} Draw: ${joinDigits(p.cash4.digits)}`);
     if (p.cash4.drawNo) L.push(`(${drawNo(p.cash4.drawNo)})`);
+    if (p.cash4.payout) L.push(`Payout: ${money(p.cash4.payout)}`);
     L.push('');
   }
   if (p.cash4?.multiplier) {
-    L.push(`The Winning Ball for the CASH 4 Multi-X ${p.banner} Draw: ${p.cash4.multiplier}`);
-    if (p.cash4.payout) L.push(`Payout: ${money(p.cash4.payout)}`);
-    L.push('');
+    L.push(`The Winning Ball for the CASH 4 Multi-X ${p.banner} Draw: ${p.cash4.multiplier}`, '');
   }
   return L;
 }

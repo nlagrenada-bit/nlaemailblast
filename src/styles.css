@@ -38,12 +38,54 @@
 
 html, body, #root { height: 100%; }
 
+/* ---------------------------------------------- time-of-day background
+
+   A fixed lottery-ball backdrop sits behind everything, with a coloured wash
+   over it that changes with the time of day. The wash is what shifts the
+   "lighting": warm and pale at dawn, bright and neutral at midday, amber in
+   the afternoon, deep navy at night. The app surfaces stay light and readable
+   on top; only the margins around them pick up the tint.
+
+   To swap in a licensed photo later, replace the --bg-image URL below with the
+   photo and keep everything else. */
+:root {
+  --bg-image: url('/assets/balls-bg.svg');
+}
+body::before,
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -2;
+  pointer-events: none;
+}
+body::before {
+  background: var(--bg-image) center / cover no-repeat;
+  opacity: 0.85;
+  transition: opacity 1.2s ease;
+}
+body::after {
+  z-index: -1;
+  background: var(--tod-wash, linear-gradient(180deg, rgba(243,246,251,0.35), rgba(243,246,251,0.6)));
+  transition: background 1.5s ease;
+}
+
+/* Four lighting moods. The class goes on <html> and is set from the clock. */
+html.tod-morning   { --tod-wash: linear-gradient(160deg, rgba(255,231,186,0.62) 0%, rgba(255,243,224,0.6) 45%, rgba(226,236,250,0.7) 100%); }
+html.tod-midday    { --tod-wash: linear-gradient(180deg, rgba(226,240,255,0.5) 0%, rgba(214,232,250,0.62) 100%); }
+html.tod-afternoon { --tod-wash: linear-gradient(160deg, rgba(255,214,150,0.62) 0%, rgba(255,198,140,0.55) 45%, rgba(245,230,214,0.68) 100%); }
+html.tod-night     { --tod-wash: linear-gradient(180deg, rgba(20,40,78,0.8) 0%, rgba(11,24,51,0.9) 100%); }
+html.tod-morning   body::before { opacity: 0.85; }
+html.tod-midday    body::before { opacity: 0.95; }
+html.tod-afternoon body::before { opacity: 0.8; }
+html.tod-night     body::before { opacity: 0.35; }
+
 body {
   margin: 0;
   font-family: var(--body);
   font-size: 14px;
   color: var(--ink);
-  background: var(--mist);
+  background: transparent;   /* let the fixed backdrop + tint show through */
   -webkit-font-smoothing: antialiased;
 }
 
@@ -117,7 +159,18 @@ button, input, select, textarea { font: inherit; color: inherit; }
   background: var(--paper); border-right: 1px solid var(--line);
   padding: 18px 0 40px;
 }
-.main { flex: 1; min-width: 0; overflow-y: auto; padding: 22px 26px 60px; }
+.main {
+  flex: 1; min-width: 0; overflow-y: auto; padding: 22px 26px 60px;
+  /* faint translucent wash so the backdrop reads behind the cards without
+     ever fighting the text, which lives on solid-white cards on top. The work
+     surface stays light in every mood so the dark UI text is always legible —
+     the time-of-day mood lives in the margins, the backdrop and the topbar,
+     not on the surface people are reading. */
+  background: rgba(244, 247, 251, 0.78);
+}
+html.tod-morning   .main { background: rgba(255, 250, 242, 0.72); }
+html.tod-afternoon .main { background: rgba(255, 248, 236, 0.74); }
+html.tod-night     .main { background: rgba(238, 242, 249, 0.82); }
 .side {
   width: var(--preview); flex: none; overflow-y: auto;
   background: var(--paper); border-left: 1px solid var(--line);
@@ -222,8 +275,16 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .field input[type='email'], .field select, textarea.plain {
   padding: 9px 11px; border: 1px solid var(--line); border-radius: 8px;
   background: var(--paper); min-width: 120px;
+  color: var(--ink);   /* never inherit a light colour from an ancestor */
 }
+.field input::placeholder, textarea.plain::placeholder { color: var(--ink-3); }
 .field .money { font-family: var(--mono); }
+/* Belt-and-braces: every text-bearing control in the app stays dark on light,
+   independent of whatever surrounds it (including the new background image). */
+input[type='text'], input[type='number'], input[type='email'],
+input[type='search'], input[type='date'], textarea, select {
+  color: var(--ink);
+}
 
 /* ------------------------------------------------- the signature: the balls */
 
@@ -250,16 +311,33 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .ball.super6  { --b: #e42229; --b-light: #f4757a; --b-dark: #9c161b; }
 .ball.multix  { --b: #ffd200; --b-light: #ffe873; --b-dark: #c9a500; color: #123a7a; }
 .ball.letter  { --b: #ffffff; --b-light: #ffffff; --b-dark: #c8d3e4; color: #123a7a; }
-.ball.empty   { --b: #e7ecf5; --b-light: #f6f8fc; --b-dark: #c9d4e4; color: var(--ink-3); }
+.ball.empty {
+  --b: #e7ecf5; --b-light: #f6f8fc; --b-dark: #c9d4e4;
+  /* Explicit fallback so the ball is never a transparent shape with white
+     text: a solid pale fill and dark ink, set directly, not via variables. */
+  background:
+    radial-gradient(circle at 34% 28%, rgb(255 255 255 / 70%) 0 8%, transparent 42%),
+    radial-gradient(circle at 38% 32%, #f6f8fc 0%, #e7ecf5 62%, #c9d4e4 100%);
+  color: #16202f;
+  border: 1px solid #c9d4e4;
+}
 
-/* Typing happens *into* a ball, so entry looks like the thing it produces. */
+/* Typing happens *into* a ball, so entry looks like the thing it produces.
+   While a ball is still empty its fill is near-white, so the input text must be
+   dark to stay legible; once a coloured value lands the ball's own colour (set
+   per game class) takes over. */
 .ball-input { position: relative; }
 .ball-input input {
   position: absolute; inset: 0; width: 100%; height: 100%;
   background: none; border: 0; border-radius: 50%; text-align: center;
   font-family: var(--display); font-weight: 700; color: inherit;
-  font-size: calc(var(--ball-size) * .4); padding: 0; caret-color: var(--yellow);
+  font-size: calc(var(--ball-size) * .4); padding: 0; caret-color: var(--navy);
 }
+/* Empty ball: force dark ink on the pale fill, on the span and the input, so
+   the typed digit is always legible even before a game colour is applied. */
+.ball-input.empty,
+.ball-input.empty input { color: #16202f !important; }
+.ball-input.empty input::placeholder { color: #7387a1; }
 .ball-input input::-webkit-outer-spin-button,
 .ball-input input::-webkit-inner-spin-button { appearance: none; margin: 0; }
 .ball-input input[type='number'] { appearance: textfield; }
@@ -461,3 +539,45 @@ table.list .num { font-family: var(--mono); font-size: 12.5px; }
   .main { padding: 16px 14px 50px; }
   .row { gap: 16px; }
 }
+
+/* ---------------------------------------------- time-of-day background theme
+
+   The lottery-ball photo sits behind the whole app, very softly, with a
+   time-of-day wash over it so the room "lightens" through the day: cool blue at
+   dawn, bright and neutral midday, warm gold in the afternoon, deep indigo at
+   night. The wash is kept pale enough that all the white result cards and dark
+   text stay fully legible — the photo is atmosphere, not a competitor for
+   attention. Applied via a data-attribute on <body> set from the clock. */
+
+body {
+  background-image:
+    linear-gradient(var(--tod-wash), var(--tod-wash)),
+    url('/assets/bg-balls.jpg');
+  background-size: cover, cover;
+  background-position: center, center;
+  background-attachment: fixed, fixed;
+  background-repeat: no-repeat, no-repeat;
+  --tod-wash: rgba(242, 245, 251, 0.86);   /* default / midday */
+}
+
+/* Morning — cool, fresh light */
+body[data-tod='morning'] {
+  --tod-wash: linear-gradient(180deg, rgba(214, 232, 247, 0.88), rgba(230, 240, 250, 0.9));
+}
+/* Midday — bright, near-neutral */
+body[data-tod='midday'] {
+  --tod-wash: linear-gradient(180deg, rgba(244, 247, 252, 0.9), rgba(236, 242, 250, 0.88));
+}
+/* Afternoon — warm gold */
+body[data-tod='afternoon'] {
+  --tod-wash: linear-gradient(180deg, rgba(250, 243, 228, 0.88), rgba(248, 236, 214, 0.9));
+}
+/* Night — deep indigo (cards stay white so text is still dark-on-white) */
+body[data-tod='night'] {
+  --tod-wash: linear-gradient(180deg, rgba(18, 30, 58, 0.9), rgba(11, 20, 44, 0.92));
+}
+
+/* The two chrome surfaces get a faint translucency so the background reads
+   through at their edges without touching legibility of their contents. */
+body[data-tod] .rail,
+body[data-tod] .side { backdrop-filter: saturate(1.05); }

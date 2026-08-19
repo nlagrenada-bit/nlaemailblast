@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { supabase, ASSET_BASE } from './lib/supabase.js';
-import { todayLocal, shiftDate } from './lib/dates.js';
+import { todayLocal, shiftDate, applyTimeOfDay } from './lib/dates.js';
 import * as api from './lib/api.js';
 import { ToastHost } from './components/Toast.jsx';
 import ResultsView from './views/ResultsView.jsx';
@@ -28,6 +28,14 @@ export default function App() {
   const [settings, setSettings] = useState({});
   const [groups, setGroups] = useState([]);
 
+  // Shift the background lighting with the time of day, and keep it current
+  // while the app stays open.
+  useEffect(() => {
+    applyTimeOfDay();
+    const t = setInterval(applyTimeOfDay, 5 * 60 * 1000);
+    return () => clearInterval(t);
+  }, []);
+
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => setSession(data.session ?? null));
     const { data: sub } = supabase.auth.onAuthStateChange((event, s) => {
@@ -35,6 +43,19 @@ export default function App() {
       setSession(s);
     });
     return () => sub.subscription.unsubscribe();
+  }, []);
+
+  // Tint the whole app by time of day in Grenada, refreshed every few minutes.
+  useEffect(() => {
+    const apply = () => {
+      const offset = Number(import.meta.env.VITE_TZ_OFFSET_HOURS ?? -4);
+      const h = new Date(Date.now() + offset * 3600 * 1000).getUTCHours();
+      const tod = h < 11 ? 'morning' : h < 15 ? 'midday' : h < 18 ? 'afternoon' : 'night';
+      document.body.setAttribute('data-tod', tod);
+    };
+    apply();
+    const id = setInterval(apply, 5 * 60 * 1000);
+    return () => clearInterval(id);
   }, []);
 
   useEffect(() => {

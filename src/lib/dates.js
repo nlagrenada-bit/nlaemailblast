@@ -26,3 +26,25 @@ export const to12h = (hhmm) => {
   const hh = h % 12 === 0 ? 12 : h % 12;
   return `${hh}:${String(m).padStart(2, '0')}${ampm}`;
 };
+
+/**
+ * Which lighting mood applies now, in Grenada local time.
+ * Morning 5–11, Midday 11–15, Afternoon 15–18, Night otherwise.
+ */
+export function timeOfDay(offsetHours = -4) {
+  const d = new Date(Date.now() + offsetHours * 3600 * 1000);
+  const h = d.getUTCHours();
+  if (h >= 5 && h < 11) return 'morning';
+  if (h >= 11 && h < 15) return 'midday';
+  if (h >= 15 && h < 18) return 'afternoon';
+  return 'night';
+}
+
+/** Sets the tod-* class on <html>; returns the applied mood. */
+export function applyTimeOfDay(offsetHours = -4) {
+  const mood = timeOfDay(offsetHours);
+  const el = document.documentElement;
+  el.classList.remove('tod-morning', 'tod-midday', 'tod-afternoon', 'tod-night');
+  el.classList.add(`tod-${mood}`);
+  return mood;
+}
