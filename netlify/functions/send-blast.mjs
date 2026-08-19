@@ -7,6 +7,7 @@
 
 import { requireStaff } from './lib/supabaseAdmin.mjs';
 import { mailer, batches, sleep } from './lib/mailer.mjs';
+import { pushResultsToWebsite } from './lib/websiteWebhook.mjs';
 
 const json = (body, status = 200) =>
   new Response(JSON.stringify(body), {
@@ -113,7 +114,31 @@ export default async (request) => {
     error: failed ? `${failed} address(es) were rejected by the provider.` : null,
   }).eq('id', blastId);
 
-  return json({ ok: true, sent, failed, recipients: emails.length });
+  // Push the published results to the NLA website (if configured). This runs
+  // after the email is sent and never blocks or fails the blast: a website
+  // problem must not stop staff getting results out by email. Any failures are
+  // recorded on the blast row for follow-up.
+  let website;
+  if (sent > 0) {
+    try {
+      const [daily, cashPops, lotto, super6] = await Promise.all([
+        db.from('daily_results').select('*').eq('draw_date', blast.draw_date).then((r) => r.data || []),
+        db.from('cash_pop_results').select('*').eq('draw_date', blast.draw_date).then((r) => r.data || []),
+        db.from('lotto_results').select('*').eq('draw_date', blast.draw_date).maybeSingle().then((r) => r.data),
+        db.from('super6_results').select('*').eq('draw_date', blast.draw_date).maybeSingle().then((r) => r.data),
+      ]);
+      website = await pushResultsToWebsite({ date: blast.draw_date, daily, cashPops, lotto, super6 });
+      if (website?.failed?.length) {
+        await db.from('blasts').update({
+          error: `${website.failed.length} result(s) failed to reach the website.`,
+        }).eq('id', blastId);
+      }
+    } catch (e) {
+      website = { error: e.message };
+    }
+  }
+
+  return json({ ok: true, sent, failed, recipients: emails.length, website });
 };
 
 export const config = { path: '/api/send-blast' };

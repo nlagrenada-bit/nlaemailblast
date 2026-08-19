@@ -12,8 +12,8 @@ export const DAILY_PERIODS = [
 /** The five Cash Pop draws. */
 export const CASH_POP_PERIODS = [
   { code: 'kick_off', time: '08:45', label: 'Kick-Off Pop', banner: 'KICK-OFF POP' },
-  { code: 'mid_rush', time: '11:45', label: 'Mid-Rush Pop', banner: 'MID-RUSH POP' },
-  { code: 'lunch', time: '14:45', label: 'Lunch Pop', banner: 'LUNCH POP' },
+  { code: 'lunch', time: '11:45', label: 'Lunch Pop', banner: 'LUNCH POP' },
+  { code: 'mid_rush', time: '14:45', label: 'Mid-Rush Pop', banner: 'MID-RUSH POP' },
   { code: 'after_work', time: '17:45', label: 'After-Work Pop', banner: 'AFTER-WORK POP' },
   { code: 'prime_time', time: '20:45', label: 'Prime-Time Pop', banner: 'PRIME-TIME POP' },
 ];

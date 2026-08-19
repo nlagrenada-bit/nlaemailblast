@@ -96,7 +96,7 @@ function nearest(hhmm, slots, tolMin = 90) {
 }
 
 const DAILY_SLOTS = { '09:45': 'mid_morning', '12:45': 'midday', '16:45': 'mid_afternoon', '19:45': 'evening' };
-const POP_SLOTS = { '08:45': 'kick_off', '11:45': 'mid_rush', '14:45': 'lunch', '17:45': 'after_work', '20:45': 'prime_time' };
+const POP_SLOTS = { '08:45': 'kick_off', '11:45': 'lunch', '14:45': 'mid_rush', '17:45': 'after_work', '20:45': 'prime_time' };
 
 const digits = (s) => String(s).replace(/\D/g, '').split('').map(Number);
 const nums = (s) => String(s).trim().split(/\s+/).map((n) => Number(n)).filter((n) => !Number.isNaN(n));
