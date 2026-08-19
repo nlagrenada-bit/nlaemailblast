@@ -171,3 +171,54 @@ export async function nextDrawNumbers() {
   if (error) throw new Error(error.message);
   return Object.fromEntries((data || []).map((r) => [r.game, { last: r.last_no, next: r.next_no }]));
 }
+
+// ---------------------------------------------------------- test email
+
+export async function sendTestEmail(to) {
+  const { data: { session } } = await supabase.auth.getSession();
+  const res = await fetch('/api/test-email', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', authorization: `Bearer ${session?.access_token ?? ''}` },
+    body: JSON.stringify({ to }),
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(body.error || 'The test could not be sent.');
+  return body;
+}
+
+// --------------------------------------------------------- archive / history
+
+/** Distinct dates that have any result, most recent first, for browsing. */
+export async function listResultDates({ from, to, limit = 400 } = {}) {
+  // Pull dates from each table and merge; Supabase has no cross-table distinct.
+  const q = (t) => {
+    let sel = supabase.from(t).select('draw_date').order('draw_date', { ascending: false }).limit(limit);
+    if (from) sel = sel.gte('draw_date', from);
+    if (to) sel = sel.lte('draw_date', to);
+    return sel.then(({ data }) => (data || []).map((r) => r.draw_date));
+  };
+  const [a, b, c, d] = await Promise.all([
+    q('daily_results'), q('cash_pop_results'), q('lotto_results'), q('super6_results'),
+  ]);
+  const set = new Set([...a, ...b, ...c, ...d]);
+  return [...set].sort().reverse().slice(0, limit);
+}
+
+/** Find the date a given game + draw number belongs to. */
+export async function findByDrawNo(game, drawNo) {
+  const n = Number(drawNo);
+  if (!n) return null;
+  if (game === 'lotto' || game === 'super6') {
+    const { data } = await supabase.from(`${game}_results`).select('draw_date').eq('draw_no', n).maybeSingle();
+    return data ? { date: data.draw_date, game } : null;
+  }
+  if (game === 'cash_pop') {
+    const { data } = await supabase.from('cash_pop_results').select('draw_date,period').eq('draw_no', n).maybeSingle();
+    return data ? { date: data.draw_date, game, period: data.period } : null;
+  }
+  // daily games each have their own draw-number column
+  const col = { play_way: 'play_way_draw_no', pick3: 'pick3_draw_no', cash4: 'cash4_draw_no' }[game];
+  if (!col) return null;
+  const { data } = await supabase.from('daily_results').select('draw_date,period').eq(col, n).maybeSingle();
+  return data ? { date: data.draw_date, game, period: data.period } : null;
+}

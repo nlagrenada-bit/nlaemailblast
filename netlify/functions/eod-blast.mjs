@@ -93,4 +93,9 @@ async function notifyDesk(subject, text) {
   } catch { /* notification failure must not fail the job */ }
 }
 
-export const config = { schedule: '0 1 * * 2-6,0' };   // 21:00 AST, Mon-Sat
+// Fire at 21:00 AST (Grenada, UTC-4), Monday to Saturday.
+// 21:00 AST is 01:00 UTC the *next* calendar day, so the UTC days are shifted
+// forward by one: Mon-Sat AST -> Tue-Sun UTC. Cron day-of-week is 0-6 (0=Sun),
+// and 7 is out of range and rejected by Netlify, so Sunday is written as 0:
+// '2-6,0' = Tue,Wed,Thu,Fri,Sat,Sun UTC = Mon-Sat 21:00 AST.
+export const config = { schedule: '0 1 * * 2-6,0' };

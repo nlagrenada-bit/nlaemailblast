@@ -10,15 +10,50 @@ export default function SettingsView({ settings, onChanged }) {
   const [greeting, setGreeting] = useState(settings.greeting || 'Dear All,');
   const [footer, setFooter] = useState(settings.footer || '');
   const [eodMode, setEodMode] = useState(settings.eod_mode || 'draft');
+  const [testTo, setTestTo] = useState('info@nla.gd');
+  const [testing, setTesting] = useState(false);
 
   async function save(key, value) {
     try { await api.saveSetting(key, value); onChanged(); toast('Saved.', 'good'); }
     catch (e) { toast(e.message, 'bad'); }
   }
 
+  async function runTest() {
+    setTesting(true);
+    try {
+      const r = await api.sendTestEmail(testTo);
+      toast(`Test sent to ${r.to}. Check that inbox.`, 'good');
+    } catch (e) { toast(e.message, 'bad'); } finally { setTesting(false); }
+  }
+
   return (
     <div className="main" style={{ maxWidth: 900 }}>
       <div className="pagehead"><h1>Settings</h1></div>
+
+      <section className="card">
+        <header><h3>Sending address</h3><span className="hint">Where blasts are sent from</span></header>
+        <div className="body">
+          <p style={{ margin: '0 0 16px', fontSize: 13.5, color: 'var(--ink-2)', lineHeight: 1.6 }}>
+            The from-address is set on the server (the <code>MAIL_FROM</code> and SMTP settings in
+            Netlify) so credentials never reach the browser. Most likely <strong>info@nla.gd</strong>.
+            Use the test below to confirm the address is working before sending a real blast.
+          </p>
+          <div className="row" style={{ alignItems: 'flex-end' }}>
+            <div className="field">
+              <label>Send a test to</label>
+              <input type="email" value={testTo} placeholder="info@nla.gd"
+                onChange={(e) => setTestTo(e.target.value)} style={{ minWidth: 240 }} />
+            </div>
+            <button className="btn primary" onClick={runTest} disabled={testing || !testTo.trim()}>
+              {testing ? 'Sending…' : 'Send test email'}
+            </button>
+          </div>
+          <p style={{ margin: '12px 0 0', fontSize: 12.5, color: 'var(--ink-3)' }}>
+            A short test message goes to that address through the live mail path. If it arrives,
+            the sending address and SMTP credentials are correct.
+          </p>
+        </div>
+      </section>
 
       <section className="card">
         <header><h3>Free ticket letters</h3><span className="hint">Reads as “G as in GRAND”</span></header>

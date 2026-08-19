@@ -5,7 +5,7 @@ import {
 } from '../../shared/config.js';
 import { buildDoc, validateDoc } from '../../shared/buildDoc.js';
 import { buildEmail } from '../../shared/emailTemplate.js';
-import { ASSET_BASE } from '../lib/supabase.js';
+import { ASSET_BASE, EMAIL_ASSET_BASE } from '../lib/supabase.js';
 import { todayLocal } from '../lib/dates.js';
 import * as api from '../lib/api.js';
 import Rail from '../components/Rail.jsx';
@@ -97,7 +97,7 @@ export default function ResultsView({ date, settings, groups, canSend }) {
 
   const check = useMemo(() => validateDoc(doc), [doc]);
   const email = useMemo(
-    () => buildEmail(doc, { assetBase: ASSET_BASE, footer: settings.footer }),
+    () => buildEmail(doc, { assetBase: EMAIL_ASSET_BASE, footer: settings.footer }),
     [doc, settings.footer],
   );
 

@@ -177,7 +177,7 @@ somebody removed at 8:50pm will not receive the 9pm summary.
 
 ## The nightly complete-day blast
 
-Runs at 9:00pm AST, Monday to Saturday (`0 1 * * 2-7` in UTC).
+Runs at 9:00pm AST, Monday to Saturday (`0 1 * * 2-6,0` in UTC — the UTC days that map to Mon–Sat 9pm AST).
 
 Default behaviour is **stage a draft**: it assembles the complete day, saves it
 as a draft, and emails whoever is listed in `DESK_NOTIFY_TO` to say it is ready,
@@ -278,3 +278,57 @@ scripts/
   extract_symbols.py  Play Way chart -> 36 transparent symbols
   sample-email.mjs    render a sample blast without a database
 ```
+
+---
+
+## Importing historical results
+
+The `scripts/import-history.mjs` script backfills past draws from the NLA
+"Winning Numbers for Period" exports (the `.xlsx` holds Lotto / Super 6 / Cash
+Pop; the `.csv` holds Play Way / Pick 3 / Cash 4).
+
+```bash
+# needs SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY (reads .env if present)
+node scripts/import-history.mjs \
+  --csv            "Winning_Numbers_for_Period-Pick_3cash4.csv" \
+  --xlsx           "Winning_Numbers_for_Period.xlsx" \
+  --prizes-daily   "Revenue_and_Prize_Summary_for_Period-Dailies.csv" \
+  --prizes-jackpot "Revenue_and_Prize_Summary_for_Period-Jackpot.csv" \
+  --dry-run          # preview counts and flagged rows without writing
+```
+
+**Payouts.** The two "Revenue and Prize Summary" files carry the payout in
+their *Total Prizes* column. Each base game and its Multi-X appear as separate
+rows sharing a draw number; the importer **adds the Multi-X prize to the base
+game's** to get the total payout the app shows. Example: Play Way draw 10577
+paid 13,704 on the base game and 34,464 on Multi-X, so the stored payout is
+48,168. Skip these two flags and no payouts are written (numbers still import).
+
+Drop `--dry-run` to write. Every row is an upsert keyed on (date, period) or
+date, so it is safe to re-run. Draw times that drift from the schedule (older
+evening draws logged at 18:45) are snapped to their nearest slot; anything that
+can't be placed, or whose value is invalid for its game, is listed at the end
+rather than written. Draw numbers come straight from the export, so the app's
+next-number suggestions continue the real sequences.
+
+Verified against the source: 5,329 daily draw periods, 939 Lotto, 626 Super 6,
+721 Cash Pop, from January 2020 to present.
+
+## Sending past results
+
+Any past draw can be sent two ways:
+
+- **Results tab** — use the date navigator to move to any date; the rail shows
+  that day's draws exactly as it does for today, and the same preview and send
+  flow applies.
+- **Archive tab** — browse every date that has results (grouped by month), or
+  find a specific draw by its number and game. Selecting one opens it in the
+  Results view, ready to preview and send.
+
+## Testing the sending address
+
+**Settings → Sending address** has a test box. Enter an address (default
+`info@nla.gd`) and it sends a short message through the live mail path. If it
+arrives, the sending address and SMTP credentials are correct. The from-address
+itself is configured server-side (`MAIL_FROM` in Netlify), so it is never
+exposed in the browser.

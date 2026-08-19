@@ -7,11 +7,13 @@ import ResultsView from './views/ResultsView.jsx';
 import RecipientsView from './views/RecipientsView.jsx';
 import HistoryView from './views/HistoryView.jsx';
 import SettingsView from './views/SettingsView.jsx';
+import ArchiveView from './views/ArchiveView.jsx';
 import SignIn from './views/SignIn.jsx';
 import ResetPassword from './views/ResetPassword.jsx';
 
 const TABS = [
   ['results', 'Results'],
+  ['archive', 'Archive'],
   ['recipients', 'Recipients'],
   ['history', 'History'],
   ['settings', 'Settings'],
@@ -107,6 +109,9 @@ export default function App() {
             )}
             {tab === 'recipients' && (
               <RecipientsView groups={groups} onGroupsChanged={() => api.listGroups().then(setGroups)} />
+            )}
+            {tab === 'archive' && (
+              <ArchiveView onOpenDate={(d) => { setDate(d); setTab('results'); }} />
             )}
             {tab === 'history' && <HistoryView groups={groups} canSend={canSend} />}
             {tab === 'settings' && <SettingsView settings={settings} onChanged={refreshSettings} />}
