@@ -288,6 +288,27 @@ input[type='search'], input[type='date'], textarea, select {
 
 /* ------------------------------------------------- the signature: the balls */
 
+/* Plain number boxes for result entry. The lottery-ball look is kept for the
+   email; on the data-entry screen a clear rectangular field where the digit is
+   fully visible is easier to read and check. */
+.num-box {
+  height: 52px; border: 1.5px solid var(--line); border-radius: 10px;
+  background: var(--paper); color: var(--ink);
+  font-family: var(--display); font-weight: 700; text-align: center;
+  font-size: 22px; padding: 0 6px; -moz-appearance: textfield;
+}
+.num-box-sm { width: 52px; }
+.num-box-md { width: 68px; }
+.num-box::placeholder { color: var(--line); font-weight: 600; }
+.num-box:hover { border-color: var(--ink-3); }
+.num-box:focus, .num-box:focus-visible {
+  outline: none; border-color: var(--sky);
+  box-shadow: 0 0 0 3px rgba(30, 155, 215, 0.18);
+}
+.num-box::-webkit-outer-spin-button,
+.num-box::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+
+
 .balls { display: flex; gap: 8px; align-items: center; }
 
 .ball {
@@ -321,30 +342,6 @@ input[type='search'], input[type='date'], textarea, select {
   color: #16202f;
   border: 1px solid #c9d4e4;
 }
-
-/* Typing happens *into* a ball, so entry looks like the thing it produces.
-   While a ball is still empty its fill is near-white, so the input text must be
-   dark to stay legible; once a coloured value lands the ball's own colour (set
-   per game class) takes over. */
-.ball-input { position: relative; }
-.ball-input input {
-  position: absolute; inset: 0; width: 100%; height: 100%;
-  background: none; border: 0; border-radius: 50%; text-align: center;
-  font-family: var(--display); font-weight: 700; color: inherit;
-  font-size: calc(var(--ball-size) * .4); padding: 0; caret-color: var(--navy);
-}
-/* Empty ball: force dark ink on the pale fill, on the span and the input, so
-   the typed digit is always legible even before a game colour is applied. */
-.ball-input.empty,
-.ball-input.empty input { color: #16202f !important; }
-.ball-input.empty input::placeholder { color: #7387a1; }
-.ball-input input::-webkit-outer-spin-button,
-.ball-input input::-webkit-inner-spin-button { appearance: none; margin: 0; }
-.ball-input input[type='number'] { appearance: textfield; }
-.ball-input:focus-within {
-  box-shadow: 0 0 0 3px #fff, 0 0 0 6px var(--sky); border-radius: 50%;
-}
-.ball-input input:focus-visible { outline: none; }
 
 .symbol-chip {
   display: inline-flex; align-items: center; gap: 9px;

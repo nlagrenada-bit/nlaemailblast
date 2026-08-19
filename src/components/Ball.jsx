@@ -17,9 +17,10 @@ export function Ball({ value, style = 'cashpop', small = false }) {
 }
 
 /**
- * A number input shaped like the ball it will become in the email. Typing a
- * full-width value hops to the next ball, so a three-digit Pick 3 result is
- * three keystrokes.
+ * A plain number text box for entering a single value (Play Way, Cash Pop, or
+ * one Lotto/Super 6 number). The lottery-ball styling is reserved for the
+ * email — during entry a clear rectangular field where the number is fully
+ * visible is far easier to read and check.
  */
 export function BallInput({
   value, onChange, style = 'cashpop', min = 0, max = 9, width = 1,
@@ -47,20 +48,22 @@ export function BallInput({
     if (e.key === 'ArrowDown') { e.preventDefault(); onChange(Math.max(min, (Number(value) || min + 1) - 1)); }
   }
 
+  // one-digit games get a narrow box, two-digit a slightly wider one
+  const boxClass = `num-box num-box-${width <= 1 ? 'sm' : 'md'}`;
+
   return (
-    <span className={`ball ball-input ${filled ? style : 'empty'}`}>
-      {filled ? pad(value, style) : ''}
-      <input
-        ref={ref}
-        type="text"
-        inputMode="numeric"
-        aria-label={label}
-        value={filled ? String(value) : ''}
-        onChange={handle}
-        onKeyDown={keyDown}
-        onFocus={(e) => e.target.select()}
-      />
-    </span>
+    <input
+      ref={ref}
+      className={boxClass}
+      type="text"
+      inputMode="numeric"
+      aria-label={label}
+      value={filled ? String(value) : ''}
+      placeholder={width <= 1 ? '0' : '—'}
+      onChange={handle}
+      onKeyDown={keyDown}
+      onFocus={(e) => e.target.select()}
+    />
   );
 }
 
