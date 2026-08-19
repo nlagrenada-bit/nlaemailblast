@@ -47,6 +47,61 @@ export default function ResultsView({ date, settings, groups, canSend }) {
       : scheduled.lotto ? 'lotto' : scheduled.super6 ? 'super6' : 'eod');
   }, [state, selected, scheduled]);
 
+  const [kind, code] = (selected || '').split(':');
+  const dailyRow = code ? state?.daily.find((r) => r.period === code) : null;
+  const popRow = code ? state?.cashPops.find((r) => r.period === code) : null;
+
+  // ------------------------------------------------------- preview & email
+
+  const scope = useMemo(() => {
+    if (!state) return { kind: 'custom', label: '', daily: [], cashPops: [], lotto: null, super6: null };
+    if (selected === 'eod') {
+      return {
+        kind: 'eod', label: 'Complete day results',
+        daily: state.daily, cashPops: state.cashPops,
+        lotto: state.lotto, super6: state.super6,
+      };
+    }
+    if (kind === 'daily') {
+      return {
+        kind: 'daily_period',
+        label: DAILY_PERIODS.find((p) => p.code === code)?.label,
+        daily: dailyRow ? [dailyRow] : [], cashPops: [], lotto: null, super6: null,
+      };
+    }
+    if (kind === 'pop') {
+      const order = CASH_POP_PERIODS.map((p) => p.code);
+      const upto = order.indexOf(code);
+      const pops = includeEarlierPops
+        ? state.cashPops.filter((r) => order.indexOf(r.period) <= upto)
+        : (popRow ? [popRow] : []);
+      return {
+        kind: 'cash_pop',
+        label: CASH_POP_PERIODS.find((p) => p.code === code)?.label,
+        daily: [], cashPops: pops, lotto: null, super6: null,
+      };
+    }
+    if (selected === 'lotto') {
+      return { kind: 'lotto', label: 'Lotto Draw', daily: [], cashPops: [], lotto: state.lotto, super6: null };
+    }
+    if (selected === 'super6') {
+      return { kind: 'super6', label: 'Super 6 Draw', daily: [], cashPops: [], lotto: null, super6: state.super6 };
+    }
+    return { kind: 'custom', label: '', daily: [], cashPops: [], lotto: null, super6: null };
+  }, [selected, state, includeEarlierPops, kind, code, dailyRow, popRow]);
+
+  const doc = useMemo(() => buildDoc({
+    date, kind: scope.kind, daily: scope.daily, cashPops: scope.cashPops,
+    lotto: scope.lotto, super6: scope.super6, settings, day: state?.day,
+  }), [date, scope, settings, state?.day]);
+
+  const check = useMemo(() => validateDoc(doc), [doc]);
+  const email = useMemo(
+    () => buildEmail(doc, { assetBase: ASSET_BASE, footer: settings.footer }),
+    [doc, settings.footer],
+  );
+
+
   if (!state) return <div className="main"><div className="empty">Loading the day…</div></div>;
 
   // ------------------------------------------------------------- mutations
@@ -97,60 +152,8 @@ export default function ResultsView({ date, settings, groups, canSend }) {
     } catch (e) { toast(e.message, 'bad'); }
   };
 
+
   // -------------------------------------------------------- what to render
-
-  const [kind, code] = (selected || '').split(':');
-  const dailyRow = code ? state.daily.find((r) => r.period === code) : null;
-  const popRow = code ? state.cashPops.find((r) => r.period === code) : null;
-
-  // ------------------------------------------------------- preview & email
-
-  const scope = useMemo(() => {
-    if (selected === 'eod') {
-      return {
-        kind: 'eod', label: 'Complete day results',
-        daily: state.daily, cashPops: state.cashPops,
-        lotto: state.lotto, super6: state.super6,
-      };
-    }
-    if (kind === 'daily') {
-      return {
-        kind: 'daily_period',
-        label: DAILY_PERIODS.find((p) => p.code === code)?.label,
-        daily: dailyRow ? [dailyRow] : [], cashPops: [], lotto: null, super6: null,
-      };
-    }
-    if (kind === 'pop') {
-      const order = CASH_POP_PERIODS.map((p) => p.code);
-      const upto = order.indexOf(code);
-      const pops = includeEarlierPops
-        ? state.cashPops.filter((r) => order.indexOf(r.period) <= upto)
-        : (popRow ? [popRow] : []);
-      return {
-        kind: 'cash_pop',
-        label: CASH_POP_PERIODS.find((p) => p.code === code)?.label,
-        daily: [], cashPops: pops, lotto: null, super6: null,
-      };
-    }
-    if (selected === 'lotto') {
-      return { kind: 'lotto', label: 'Lotto Draw', daily: [], cashPops: [], lotto: state.lotto, super6: null };
-    }
-    if (selected === 'super6') {
-      return { kind: 'super6', label: 'Super 6 Draw', daily: [], cashPops: [], lotto: null, super6: state.super6 };
-    }
-    return { kind: 'custom', label: '', daily: [], cashPops: [], lotto: null, super6: null };
-  }, [selected, state, includeEarlierPops, kind, code, dailyRow, popRow]);
-
-  const doc = useMemo(() => buildDoc({
-    date, kind: scope.kind, daily: scope.daily, cashPops: scope.cashPops,
-    lotto: scope.lotto, super6: scope.super6, settings, day: state.day,
-  }), [date, scope, settings, state.day]);
-
-  const check = useMemo(() => validateDoc(doc), [doc]);
-  const email = useMemo(
-    () => buildEmail(doc, { assetBase: ASSET_BASE, footer: settings.footer }),
-    [doc, settings.footer],
-  );
 
   // -------------------------------------------------------------- sending
 
