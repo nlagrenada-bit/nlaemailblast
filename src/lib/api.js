@@ -58,8 +58,14 @@ export const listRecipients = () =>
     .select('*, recipient_group_members(group_id)')
     .order('email').then(unwrap);
 
-export const addRecipient = (row) =>
-  supabase.from('recipients').insert(row).select().single().then(unwrap);
+export const addRecipient = async (row, groupIds = []) => {
+  const rec = await supabase.from('recipients').insert(row).select().single().then(unwrap);
+  if (groupIds.length) {
+    await supabase.from('recipient_group_members')
+      .insert(groupIds.map((group_id) => ({ recipient_id: rec.id, group_id })));
+  }
+  return rec;
+};
 
 export const updateRecipient = (id, patch) =>
   supabase.from('recipients').update(patch).eq('id', id).select().single().then(unwrap);
@@ -77,6 +83,29 @@ export const setGroups = async (recipientId, groupIds) => {
       .insert(groupIds.map((group_id) => ({ recipient_id: recipientId, group_id })));
   }
 };
+
+/** Add many recipients to one group (idempotent — ignores already-members). */
+export const addToGroup = async (recipientIds, groupId) => {
+  if (!recipientIds.length) return;
+  await supabase.from('recipient_group_members')
+    .upsert(recipientIds.map((recipient_id) => ({ recipient_id, group_id: groupId })),
+      { onConflict: 'recipient_id,group_id', ignoreDuplicates: true });
+};
+
+/** Remove many recipients from one group. */
+export const removeFromGroup = async (recipientIds, groupId) => {
+  if (!recipientIds.length) return;
+  await supabase.from('recipient_group_members')
+    .delete().eq('group_id', groupId).in('recipient_id', recipientIds);
+};
+
+/** Member count per group id, as a { [groupId]: count } map. */
+export async function groupCounts() {
+  const { data } = await supabase.from('recipient_group_members').select('group_id');
+  const out = {};
+  for (const r of data || []) out[r.group_id] = (out[r.group_id] || 0) + 1;
+  return out;
+}
 
 /**
  * Bulk import. Accepts pasted text or a CSV: one address per line, optionally
@@ -142,7 +171,7 @@ export const createBlast = (row) =>
 
 export const listBlasts = (limit = 60) =>
   supabase.from('blasts')
-    .select('id,draw_date,kind,label,subject,status,recipient_count,sent_count,failed_count,sent_at,created_at,error')
+    .select('id,draw_date,kind,label,subject,status,recipient_count,sent_count,failed_count,sent_at,created_at,error,is_resend,explicit_emails')
     .order('created_at', { ascending: false }).limit(limit).then(unwrap);
 
 export const getBlast = (id) =>
@@ -233,3 +262,12 @@ export async function findByDrawNo(game, drawNo) {
   const { data } = await supabase.from('daily_results').select('draw_date,period').eq(col, n).maybeSingle();
   return data ? { date: data.draw_date, game, period: data.period } : null;
 }
+
+// -------------------------------------------------- ad-hoc send selection
+
+/** Active, sendable recipients (for the "pick specific addresses" sender). */
+export const listSendable = () =>
+  supabase.from('recipients')
+    .select('id, email, full_name')
+    .eq('active', true).eq('unsubscribed', false).is('bounced_at', null)
+    .order('email').then(unwrap);

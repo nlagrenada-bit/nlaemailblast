@@ -54,7 +54,11 @@ export default function HistoryView({ groups, canSend }) {
                 {rows.map((b) => (
                   <tr key={b.id}>
                     <td className="num">{b.draw_date}</td>
-                    <td>{b.label || b.kind}</td>
+                    <td>
+                      {b.label || b.kind}
+                      {b.is_resend && <span className="tag resent-tag">RESENT</span>}
+                      {b.explicit_emails?.length ? <span className="tag pick-tag">Picked</span> : null}
+                    </td>
                     <td style={{ maxWidth: 320, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{b.subject}</td>
                     <td className="num">{b.status === 'sent' ? `${b.sent_count}${b.failed_count ? ` (${b.failed_count} failed)` : ''}` : '—'}</td>
                     <td><span className={`pill ${b.status}`}>{b.status}</span></td>

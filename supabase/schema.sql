@@ -181,6 +181,8 @@ create table if not exists blasts (
   failed_count  integer default 0,
   error         text,
   group_ids     uuid[],
+  explicit_emails text[],                    -- ad-hoc "pick specific addresses" send
+  is_resend     boolean not null default false,
   created_by    uuid references auth.users(id),
   approved_by   uuid references auth.users(id),
   created_at    timestamptz not null default now(),

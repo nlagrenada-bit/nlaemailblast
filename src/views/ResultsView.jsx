@@ -16,6 +16,21 @@ import DrawNumber from '../components/DrawNumber.jsx';
 import { useToast } from '../components/Toast.jsx';
 
 const logo = (file) => `${ASSET_BASE}/${file}`;
+
+/**
+ * Inject a "RESENT" banner at the top of the email body so recipients can see
+ * at a glance that this corrects an earlier message. Falls back to prepending
+ * if the expected anchor isn't found, so it can never silently do nothing.
+ */
+function markResent(html) {
+  const banner = `<div style="background:#b3261e;color:#fff;font-family:Arial,sans-serif;`
+    + `font-weight:700;font-size:14px;text-align:center;padding:10px 14px;letter-spacing:.02em">`
+    + `RESENT — this corrects results sent earlier. Please disregard the previous email.</div>`;
+  if (html.includes('<body')) {
+    return html.replace(/(<body[^>]*>)/i, `$1${banner}`);
+  }
+  return banner + html;
+}
 const num = (v) => (v === '' || v === null || v === undefined ? null : Number(v));
 
 export default function ResultsView({ date, settings, groups, canSend }) {
@@ -179,16 +194,28 @@ export default function ResultsView({ date, settings, groups, canSend }) {
 
   // -------------------------------------------------------------- sending
 
-  async function confirmSend(groupIds) {
+  async function confirmSend({ groupIds, emails, isResend }) {
     setBusy(true);
     try {
+      // A resend marks the subject so recipients know it supersedes the earlier
+      // email; the RESENT banner in the body is handled by the email builder.
+      const subject = isResend ? `[RESENT] ${email.subject}` : email.subject;
+      const html = isResend ? markResent(email.html) : email.html;
+      const text = isResend ? `*** RESENT — corrects earlier results ***\n\n${email.text}` : email.text;
+
       const blast = await api.createBlast({
         draw_date: date, kind: scope.kind, label: scope.label,
-        subject: email.subject, html: email.html, text_body: email.text,
-        group_ids: groupIds.length ? groupIds : null, status: 'draft',
+        subject, html, text_body: text,
+        group_ids: groupIds?.length ? groupIds : null,
+        explicit_emails: emails?.length ? emails : null,
+        is_resend: !!isResend,
+        status: 'draft',
       });
       const res = await api.sendBlast(blast.id);
-      toast(`Sent to ${res.sent} recipient${res.sent === 1 ? '' : 's'}.`, 'good');
+      const bits = [`Sent to ${res.sent} recipient${res.sent === 1 ? '' : 's'}`];
+      if (res.failed) bits.push(`${res.failed} failed`);
+      if (res.website?.failed?.length) bits.push(`${res.website.failed.length} website update(s) failed`);
+      toast(bits.join(' · ') + '.', res.failed ? 'info' : 'good');
       setDialog(false);
       reload();
     } catch (e) {

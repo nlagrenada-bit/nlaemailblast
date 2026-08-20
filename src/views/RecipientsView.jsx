@@ -11,10 +11,17 @@ export default function RecipientsView({ groups, onGroupsChanged }) {
   const [bulk, setBulk] = useState('');
   const [bulkGroups, setBulkGroups] = useState([]);
   const [one, setOne] = useState({ email: '', full_name: '' });
+  const [oneGroups, setOneGroups] = useState([]);
   const [importing, setImporting] = useState(false);
   const [newGroup, setNewGroup] = useState('');
+  const [counts, setCounts] = useState({});
+  const [editing, setEditing] = useState(null);      // recipient id whose groups are open
+  const [bulkTarget, setBulkTarget] = useState('');   // group id for bulk add/remove
 
-  const reload = () => api.listRecipients().then(setPeople).catch((e) => toast(e.message, 'bad'));
+  const reload = () => Promise.all([
+    api.listRecipients().then(setPeople),
+    api.groupCounts().then(setCounts),
+  ]).catch((e) => toast(e.message, 'bad'));
   useEffect(() => { reload(); /* eslint-disable-next-line */ }, []);
 
   async function addGroup(e) {
@@ -55,12 +62,51 @@ export default function RecipientsView({ groups, onGroupsChanged }) {
     e.preventDefault();
     if (!one.email.trim()) return;
     try {
-      await api.addRecipient({ email: one.email.trim().toLowerCase(), full_name: one.full_name.trim() || null });
+      await api.addRecipient(
+        { email: one.email.trim().toLowerCase(), full_name: one.full_name.trim() || null },
+        oneGroups,
+      );
       setOne({ email: '', full_name: '' });
-      toast('Recipient added.', 'good');
+      setOneGroups([]);
+      toast(oneGroups.length ? 'Recipient added and filed into group(s).' : 'Recipient added.', 'good');
       reload();
     } catch (err) {
       toast(/duplicate|unique/i.test(err.message) ? 'That address is already on the list.' : err.message, 'bad');
+    }
+  }
+
+  // Toggle one recipient in/out of one group, straight from the list row.
+  async function toggleMembership(recipient, groupId) {
+    const inGroup = (recipient.recipient_group_members || []).some((m) => m.group_id === groupId);
+    try {
+      if (inGroup) await api.removeFromGroup([recipient.id], groupId);
+      else await api.addToGroup([recipient.id], groupId);
+      reload();
+    } catch (e) { toast(e.message, 'bad'); }
+  }
+
+  // Add/remove the checked recipients to/from the chosen group.
+  async function bulkGroupOp(op) {
+    const ids = [...picked];
+    if (!ids.length || !bulkTarget) return;
+    const g = groups.find((x) => x.id === bulkTarget);
+    try {
+      if (op === 'add') await api.addToGroup(ids, bulkTarget);
+      else await api.removeFromGroup(ids, bulkTarget);
+      toast(`${ids.length} ${op === 'add' ? 'added to' : 'removed from'} "${g?.name}".`, 'good');
+      reload();
+    } catch (e) { toast(e.message, 'bad'); }
+  }
+
+  async function renameGroupPrompt(g) {
+    const name = prompt(`Rename group "${g.name}" to:`, g.name);
+    if (!name || name.trim() === g.name) return;
+    try {
+      await api.renameGroup(g.id, name.trim());
+      toast('Group renamed.', 'good');
+      onGroupsChanged?.();
+    } catch (e) {
+      toast(/duplicate|unique/i.test(e.message) ? 'A group with that name already exists.' : e.message, 'bad');
     }
   }
 
@@ -134,7 +180,11 @@ export default function RecipientsView({ groups, onGroupsChanged }) {
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
               {groups.map((g) => (
                 <span key={g.id} className="group-chip">
-                  {g.name}
+                  <button type="button" className="group-chip-name" onClick={() => renameGroupPrompt(g)}
+                    title="Click to rename">
+                    {g.name}
+                  </button>
+                  <span className="group-chip-count">{counts[g.id] || 0}</span>
                   <button type="button" aria-label={`Delete ${g.name}`} onClick={() => removeGroup(g)}>×</button>
                 </span>
               ))}
@@ -152,18 +202,33 @@ export default function RecipientsView({ groups, onGroupsChanged }) {
       <section className="card">
         <header><h3>Add one</h3></header>
         <div className="body">
-          <form className="row" onSubmit={addOne}>
-            <div className="field">
-              <label>Email address</label>
-              <input type="email" required value={one.email} placeholder="name@example.com"
-                onChange={(e) => setOne({ ...one, email: e.target.value })} />
+          <form onSubmit={addOne}>
+            <div className="row">
+              <div className="field">
+                <label>Email address</label>
+                <input type="email" required value={one.email} placeholder="name@example.com"
+                  onChange={(e) => setOne({ ...one, email: e.target.value })} />
+              </div>
+              <div className="field">
+                <label>Name (optional)</label>
+                <input type="text" value={one.full_name} placeholder="Newsroom desk"
+                  onChange={(e) => setOne({ ...one, full_name: e.target.value })} />
+              </div>
+              <button className="btn primary" type="submit">Add recipient</button>
             </div>
-            <div className="field">
-              <label>Name (optional)</label>
-              <input type="text" value={one.full_name} placeholder="Newsroom desk"
-                onChange={(e) => setOne({ ...one, full_name: e.target.value })} />
-            </div>
-            <button className="btn primary" type="submit">Add recipient</button>
+            {groups.length > 0 && (
+              <div className="field" style={{ marginTop: 14 }}>
+                <label>Add to group(s) — optional</label>
+                <div className="multix-picker">
+                  {groups.map((g) => (
+                    <button key={g.id} type="button" aria-pressed={oneGroups.includes(g.id)}
+                      onClick={() => setOneGroups((x) => x.includes(g.id) ? x.filter((y) => y !== g.id) : [...x, g.id])}>
+                      {g.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
           </form>
         </div>
       </section>
@@ -223,6 +288,22 @@ export default function RecipientsView({ groups, onGroupsChanged }) {
             </button>
           </div>
         </header>
+        {picked.size > 0 && groups.length > 0 && (
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '10px 16px',
+            background: 'var(--mist)', borderBottom: '1px solid var(--line)', flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 12.5, color: 'var(--ink-2)', fontWeight: 600 }}>
+              {picked.size} selected:
+            </span>
+            <select value={bulkTarget} onChange={(e) => setBulkTarget(e.target.value)}
+              style={{ padding: '6px 10px', border: '1px solid var(--line)', borderRadius: 7 }}
+              aria-label="Choose group for bulk action">
+              <option value="">Choose a group…</option>
+              {groups.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
+            </select>
+            <button className="btn sm" disabled={!bulkTarget} onClick={() => bulkGroupOp('add')}>Add to group</button>
+            <button className="btn sm ghost" disabled={!bulkTarget} onClick={() => bulkGroupOp('remove')}>Remove from group</button>
+          </div>
+        )}
         <div className="body" style={{ padding: '14px 6px' }}>
           {!people && <p style={{ padding: 14, color: 'var(--ink-3)' }}>Loading…</p>}
           {people && shown.length === 0 && (
@@ -256,9 +337,26 @@ export default function RecipientsView({ groups, onGroupsChanged }) {
                     <td className="num">{p.email}</td>
                     <td>{p.full_name || '—'}</td>
                     <td style={{ fontSize: 12, color: 'var(--ink-3)' }}>
-                      {(p.recipient_group_members || [])
-                        .map((m) => groups.find((g) => g.id === m.group_id)?.name)
-                        .filter(Boolean).join(', ') || '—'}
+                      {editing === p.id ? (
+                        <div className="multix-picker" style={{ margin: '2px 0' }}>
+                          {groups.length === 0 && <span>No groups yet</span>}
+                          {groups.map((g) => {
+                            const inG = (p.recipient_group_members || []).some((m) => m.group_id === g.id);
+                            return (
+                              <button key={g.id} type="button" aria-pressed={inG}
+                                onClick={() => toggleMembership(p, g.id)}>{g.name}</button>
+                            );
+                          })}
+                          <button type="button" className="btn sm ghost" onClick={() => setEditing(null)}>Done</button>
+                        </div>
+                      ) : (
+                        <button type="button" className="linklike" onClick={() => setEditing(p.id)}
+                          title="Edit groups">
+                          {(p.recipient_group_members || [])
+                            .map((m) => groups.find((g) => g.id === m.group_id)?.name)
+                            .filter(Boolean).join(', ') || 'Add to group'}
+                        </button>
+                      )}
                     </td>
                     <td>
                       {p.bounced_at ? <span className="pill failed">Bounced</span>

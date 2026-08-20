@@ -45,23 +45,31 @@ export default async (request) => {
   if (!claimed) return json({ error: 'Another sender already picked this up.' }, 409);
 
   // Resolve the audience at send time, so removals since drafting are honoured.
-  let query = db.from('recipients')
-    .select('email, recipient_group_members(group_id)')
-    .eq('active', true).eq('unsubscribed', false).is('bounced_at', null);
-
-  let { data: people, error: recErr } = await query;
-  if (recErr) {
-    await db.from('blasts').update({ status: 'failed', error: recErr.message }).eq('id', blastId);
-    return json({ error: 'Could not load the recipient list.' }, 500);
+  let emails;
+  if (blast.explicit_emails?.length) {
+    // Ad-hoc "pick specific addresses" send — use exactly those, but still
+    // screen out any that have since become inactive/unsubscribed/bounced.
+    const { data: ok } = await db.from('recipients')
+      .select('email')
+      .in('email', blast.explicit_emails)
+      .eq('active', true).eq('unsubscribed', false).is('bounced_at', null);
+    emails = [...new Set((ok || []).map((r) => r.email))];
+  } else {
+    let { data: people, error: recErr } = await db.from('recipients')
+      .select('email, recipient_group_members(group_id)')
+      .eq('active', true).eq('unsubscribed', false).is('bounced_at', null);
+    if (recErr) {
+      await db.from('blasts').update({ status: 'failed', error: recErr.message }).eq('id', blastId);
+      return json({ error: 'Could not load the recipient list.' }, 500);
+    }
+    if (blast.group_ids?.length) {
+      const wanted = new Set(blast.group_ids);
+      people = people.filter((p) =>
+        (p.recipient_group_members || []).some((m) => wanted.has(m.group_id)));
+    }
+    emails = [...new Set(people.map((p) => p.email))];
   }
 
-  if (blast.group_ids?.length) {
-    const wanted = new Set(blast.group_ids);
-    people = people.filter((p) =>
-      (p.recipient_group_members || []).some((m) => wanted.has(m.group_id)));
-  }
-
-  const emails = [...new Set(people.map((p) => p.email))];
   if (!emails.length) {
     await db.from('blasts').update({
       status: 'failed', error: 'No active recipients matched this audience.',
