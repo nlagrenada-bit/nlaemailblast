@@ -42,6 +42,17 @@ export const saveSuper6 = (row) =>
 export const listGroups = () =>
   supabase.from('recipient_groups').select('*').order('name').then(unwrap);
 
+export const createGroup = (name, description = null) =>
+  supabase.from('recipient_groups')
+    .insert({ name: name.trim(), description }).select().single().then(unwrap);
+
+export const renameGroup = (id, name) =>
+  supabase.from('recipient_groups')
+    .update({ name: name.trim() }).eq('id', id).select().single().then(unwrap);
+
+export const deleteGroup = (id) =>
+  supabase.from('recipient_groups').delete().eq('id', id).then(unwrap);
+
 export const listRecipients = () =>
   supabase.from('recipients')
     .select('*, recipient_group_members(group_id)')

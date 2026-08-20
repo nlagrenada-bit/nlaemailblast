@@ -137,7 +137,29 @@ export default function ResultsView({ date, settings, groups, canSend }) {
     const existing = (which === 'lotto' ? state.lotto : state.super6) || {};
     const row = { ...existing, draw_date: date, ...patch };
     delete row.created_at; delete row.updated_at;
-    if (!row.numbers?.length) row.numbers = which === 'lotto' ? [] : [];
+
+    // "numbers" arrives as a fixed-length positional array that may contain
+    // blanks while the operator is still typing. Reflect that immediately in
+    // local state (so the boxes stay responsive and keep their positions), but
+    // only WRITE numbers to the database once they form a complete, valid,
+    // unique set. Other fields (draw_no, letter, payouts) save right away.
+    const pick = which === 'lotto' ? 5 : 6;
+    const max = which === 'lotto' ? 34 : 28;
+
+    if ('numbers' in patch) {
+      const positional = patch.numbers;
+      // keep the raw positional array in local state for the inputs
+      setState((s) => ({ ...s, [which]: { ...existing, ...patch, numbers: positional } }));
+
+      const clean = positional.filter((n) => n !== '' && n !== null).map(Number);
+      const allInRange = clean.every((n) => n >= 1 && n <= max);
+      const unique = clean.length === new Set(clean).size;
+      // Not yet a valid complete set → don't hit the DB, just hold local state.
+      if (clean.length < pick || !allInRange || !unique) return;
+      // Valid & complete → persist the compacted array.
+      row.numbers = clean;
+    }
+
     setSaving(true);
     try {
       const saved = which === 'lotto' ? await api.saveLotto(row) : await api.saveSuper6(row);
@@ -460,12 +482,25 @@ function JackpotEntry({ which, row, onPatch, settings, nextNos }) {
   const commit = (k, cast = Number) =>
     draft[k] !== undefined && onPatch({ [k]: draft[k] === '' ? null : cast(draft[k]) });
 
-  const numbers = Array.from({ length: pick }, (_, i) => row?.numbers?.[i] ?? '');
+  // Keep a fixed-length array during entry so each box maps to a stable slot.
+  // Empty slots stay as '' — we only compact (drop blanks) when saving, so
+  // typing into any box, in any order, never shifts the others.
+  const numbers = Array.from({ length: pick }, (_, i) => {
+    const v = row?.numbers?.[i];
+    return v === undefined || v === null ? '' : v;
+  });
   const setNumber = (i, v) => {
     const next = [...numbers];
-    next[i] = v;
-    onPatch({ numbers: next.filter((n) => n !== '' && n !== null).map(Number) });
+    next[i] = v === '' || v === null ? '' : Number(v);
+    // store the full positional array (with blanks) on the row; the save step
+    // compacts and de-duplicates.
+    onPatch({ numbers: next });
   };
+
+  // A live check the operator can see: are the entered numbers valid and unique?
+  const entered = numbers.filter((n) => n !== '' && n !== null).map(Number);
+  const dupes = entered.length !== new Set(entered).size;
+  const complete = entered.length === pick;
 
   const words = settings.letter_words || {};
 
@@ -488,6 +523,16 @@ function JackpotEntry({ which, row, onPatch, settings, nextNos }) {
                 />
               ))}
             </div>
+            {dupes && (
+              <p style={{ margin: '8px 0 0', fontSize: 12.5, color: 'var(--danger)' }}>
+                Numbers must be unique — there's a repeat. It won't save until each is different.
+              </p>
+            )}
+            {!dupes && !complete && entered.length > 0 && (
+              <p style={{ margin: '8px 0 0', fontSize: 12.5, color: 'var(--ink-3)' }}>
+                Enter all {pick} numbers (1 to {max}) to save.
+              </p>
+            )}
           </div>
         </div>
 

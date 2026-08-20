@@ -12,9 +12,34 @@ export default function RecipientsView({ groups, onGroupsChanged }) {
   const [bulkGroups, setBulkGroups] = useState([]);
   const [one, setOne] = useState({ email: '', full_name: '' });
   const [importing, setImporting] = useState(false);
+  const [newGroup, setNewGroup] = useState('');
 
   const reload = () => api.listRecipients().then(setPeople).catch((e) => toast(e.message, 'bad'));
   useEffect(() => { reload(); /* eslint-disable-next-line */ }, []);
+
+  async function addGroup(e) {
+    e.preventDefault();
+    const name = newGroup.trim();
+    if (!name) return;
+    try {
+      await api.createGroup(name);
+      setNewGroup('');
+      toast(`Group "${name}" created.`, 'good');
+      onGroupsChanged?.();
+    } catch (err) {
+      toast(/duplicate|unique/i.test(err.message) ? 'A group with that name already exists.' : err.message, 'bad');
+    }
+  }
+
+  async function removeGroup(g) {
+    if (!confirm(`Delete the group "${g.name}"? Recipients stay on the list; only the group is removed.`)) return;
+    try {
+      await api.deleteGroup(g.id);
+      toast(`Group "${g.name}" deleted.`, 'good');
+      onGroupsChanged?.();
+      reload();
+    } catch (e) { toast(e.message, 'bad'); }
+  }
 
   const shown = useMemo(() => {
     if (!people) return [];
@@ -92,6 +117,39 @@ export default function RecipientsView({ groups, onGroupsChanged }) {
       </div>
 
       <section className="card">
+        <header>
+          <h3>Groups</h3>
+          <span className="hint">Split recipients into lists (e.g. Staff, Media) to blast separately</span>
+        </header>
+        <div className="body">
+          <form className="row" onSubmit={addGroup} style={{ marginBottom: groups.length ? 16 : 0 }}>
+            <div className="field">
+              <label>New group name</label>
+              <input type="text" value={newGroup} placeholder="e.g. Media"
+                onChange={(e) => setNewGroup(e.target.value)} />
+            </div>
+            <button className="btn primary" type="submit" disabled={!newGroup.trim()}>Create group</button>
+          </form>
+          {groups.length > 0 && (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+              {groups.map((g) => (
+                <span key={g.id} className="group-chip">
+                  {g.name}
+                  <button type="button" aria-label={`Delete ${g.name}`} onClick={() => removeGroup(g)}>×</button>
+                </span>
+              ))}
+            </div>
+          )}
+          {groups.length === 0 && (
+            <p style={{ margin: '12px 0 0', fontSize: 12.5, color: 'var(--ink-3)' }}>
+              No groups yet. Create one above, then you can file recipients into it when adding a batch,
+              and send a blast to just that group.
+            </p>
+          )}
+        </div>
+      </section>
+
+      <section className="card">
         <header><h3>Add one</h3></header>
         <div className="body">
           <form className="row" onSubmit={addOne}>
@@ -125,6 +183,11 @@ export default function RecipientsView({ groups, onGroupsChanged }) {
             <div className="field">
               <label>Put them in</label>
               <div className="multix-picker">
+                {groups.length === 0 && (
+                  <span style={{ fontSize: 12.5, color: 'var(--ink-3)', alignSelf: 'center' }}>
+                    Create a group above first
+                  </span>
+                )}
                 {groups.map((g) => (
                   <button key={g.id} type="button" aria-pressed={bulkGroups.includes(g.id)}
                     onClick={() => setBulkGroups((x) => x.includes(g.id) ? x.filter((y) => y !== g.id) : [...x, g.id])}>

@@ -578,3 +578,18 @@ body[data-tod='night'] {
    through at their edges without touching legibility of their contents. */
 body[data-tod] .rail,
 body[data-tod] .side { backdrop-filter: saturate(1.05); }
+
+/* Group chips in the Recipients view */
+.group-chip {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 6px 8px 6px 14px; background: var(--mist);
+  border: 1px solid var(--line); border-radius: 999px;
+  font-size: 13px; font-weight: 600; color: var(--ink);
+}
+.group-chip button {
+  display: inline-grid; place-items: center;
+  width: 20px; height: 20px; border: 0; border-radius: 50%;
+  background: rgba(11,44,99,0.08); color: var(--ink-2);
+  font-size: 15px; line-height: 1; cursor: pointer;
+}
+.group-chip button:hover { background: var(--danger); color: #fff; }
