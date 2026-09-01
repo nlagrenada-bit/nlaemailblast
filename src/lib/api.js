@@ -294,3 +294,16 @@ export const listSendable = () =>
     .select('id, email, full_name')
     .eq('active', true).eq('unsubscribed', false).is('bounced_at', null)
     .order('email').then(unwrap);
+
+// Push a day's results to the website/database only — no email sent.
+export async function pushToWebsite(drawDate) {
+  const { data: { session } } = await supabase.auth.getSession();
+  const res = await fetch('/api/push-website', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', authorization: `Bearer ${session?.access_token ?? ''}` },
+    body: JSON.stringify({ drawDate }),
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(body.error || 'The website update failed.');
+  return body;
+}

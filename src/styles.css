@@ -624,3 +624,10 @@ body[data-tod] .side { backdrop-filter: saturate(1.05); }
   font-size:10px; font-weight:700; padding:1px 6px; border-radius:5px; margin-left:8px; letter-spacing:.04em; }
 .tag.pick-tag { background:#eef4ff; color:var(--navy); border:1px solid #cfe0ff;
   font-size:10px; font-weight:700; padding:1px 6px; border-radius:5px; margin-left:6px; letter-spacing:.04em; }
+
+/* Database-only send toggle */
+.dbonly-toggle { display: flex; gap: 10px; align-items: flex-start; margin-top: 16px;
+  padding: 12px 14px; background: #eef4ff; border: 1px solid #cfe0ff; border-radius: 10px;
+  font-size: 12.5px; color: var(--ink-2); line-height: 1.5; cursor: pointer; }
+.dbonly-toggle input { margin-top: 2px; }
+.dbonly-toggle strong { color: var(--navy); }

@@ -195,10 +195,22 @@ export default function ResultsView({ date, settings, groups, canSend }) {
 
   // -------------------------------------------------------------- sending
 
-  async function confirmSend({ groupIds, emails, isResend }) {
+  async function confirmSend({ groupIds, emails, isResend, dbOnly }) {
     setBusy(true);
     setProgress(null);
     try {
+      if (dbOnly) {
+        const r = await api.pushToWebsite(date);
+        const failed = r?.website?.failed?.length || 0;
+        const sent = r?.website?.sent ?? 0;
+        toast(failed
+          ? `Website updated with ${sent} result(s); ${failed} failed.`
+          : `Website updated with ${sent} result(s). No email sent.`,
+          failed ? 'info' : 'good');
+        setDialog(false);
+        return;
+      }
+
       // Start the throttled send. It runs server-side over several minutes and
       // returns immediately with a run id to watch.
       const started = await api.sendBlast({

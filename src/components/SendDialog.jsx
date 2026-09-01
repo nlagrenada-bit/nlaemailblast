@@ -19,13 +19,14 @@ export default function SendDialog({
   const [search, setSearch] = useState('');
   const [count, setCount] = useState(null);
   const [isResend, setIsResend] = useState(false);
+  const [dbOnly, setDbOnly] = useState(false);
   const [typed, setTyped] = useState('');
   const first = useRef(null);
 
   useEffect(() => {
     if (!open) {
       setTyped(''); setMode('everyone'); setGroupIds([]);
-      setChosen(new Set()); setSearch(''); setIsResend(false);
+      setChosen(new Set()); setSearch(''); setIsResend(false); setDbOnly(false);
       return;
     }
     first.current?.focus();
@@ -64,11 +65,13 @@ export default function SendDialog({
   const togglePerson = (id) =>
     setChosen((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
 
-  const ready = typed.trim().toUpperCase() === (isResend ? 'RESEND' : 'SEND')
-    && count > 0 && !busy;
+  const confirmWord = dbOnly ? 'UPDATE' : (isResend ? 'RESEND' : 'SEND');
+  const ready = typed.trim().toUpperCase() === confirmWord
+    && (dbOnly || count > 0) && !busy;
 
   // What we hand back: the group filter (or null), the explicit email list (or
-  // null for group/everyone mode), and the resend flag.
+  // null for group/everyone mode), the resend flag, and whether to skip email
+  // and only update the website/database.
   const emailsForPick = () =>
     (people || []).filter((p) => chosen.has(p.id)).map((p) => p.email);
 
@@ -76,6 +79,7 @@ export default function SendDialog({
     groupIds: mode === 'groups' ? groupIds : [],
     emails: mode === 'pick' ? emailsForPick() : null,
     isResend,
+    dbOnly,
   });
 
   return (
@@ -83,7 +87,7 @@ export default function SendDialog({
       onKeyDown={(e) => e.key === 'Escape' && onClose()}>
       <div className="modal">
         <header>
-          <h2 id="send-title">{isResend ? 'Resend this blast?' : 'Send this blast?'}</h2>
+          <h2 id="send-title">{dbOnly ? 'Update the website only?' : (isResend ? 'Resend this blast?' : 'Send this blast?')}</h2>
           <p className="lede">
             This goes out immediately and cannot be recalled. Check the audience and the
             subject line below.
@@ -101,8 +105,18 @@ export default function SendDialog({
             </div>
           </div>
 
+          {/* database-only option */}
+          <label className="dbonly-toggle">
+            <input type="checkbox" checked={dbOnly} onChange={(e) => setDbOnly(e.target.checked)} />
+            <span>
+              <strong>Update the website/database only</strong> — push these results to the
+              website without emailing anyone. Use this to correct or backfill the site when no
+              email blast is needed.
+            </span>
+          </label>
+
           {/* audience mode */}
-          <div style={{ marginTop: 18 }}>
+          <div style={{ marginTop: 18, opacity: dbOnly ? 0.4 : 1, pointerEvents: dbOnly ? 'none' : 'auto' }}>
             <div className="minihead">Audience</div>
             <div className="seg" role="tablist" style={{ marginBottom: 10 }}>
               <button role="tab" aria-selected={mode === 'everyone'} onClick={() => setMode('everyone')}>Everyone</button>
@@ -151,6 +165,7 @@ export default function SendDialog({
           </div>
 
           {/* resend flag */}
+          {!dbOnly && (
           <label className="resend-toggle">
             <input type="checkbox" checked={isResend} onChange={(e) => setIsResend(e.target.checked)} />
             <span>
@@ -158,6 +173,7 @@ export default function SendDialog({
               a banner will be marked <em>RESENT</em> so recipients know it supersedes the earlier email.
             </span>
           </label>
+          )}
 
           {warnings.length > 0 && (
             <div className="notice warn" style={{ marginTop: 16, marginBottom: 0 }}>
@@ -175,12 +191,12 @@ export default function SendDialog({
           )}
 
           <div className="confirmtype">
-            <label htmlFor="confirm-send">Type {isResend ? 'RESEND' : 'SEND'} to confirm</label>
+            <label htmlFor="confirm-send">Type {confirmWord} to confirm</label>
             <input
               id="confirm-send" ref={first} value={typed} autoComplete="off"
               onChange={(e) => setTyped(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter' && ready) confirm(); }}
-              placeholder={isResend ? 'RESEND' : 'SEND'}
+              placeholder={confirmWord}
             />
           </div>
         </div>
@@ -199,7 +215,7 @@ export default function SendDialog({
             {busy ? 'Close (send continues)' : 'Cancel'}
           </button>
           <button className="btn send" disabled={!ready} onClick={confirm}>
-            {busy ? 'Sending…' : `${isResend ? 'Resend' : 'Send'} to ${count ?? 0}`}
+            {busy ? (dbOnly ? 'Updating…' : 'Sending…') : (dbOnly ? 'Update website' : `${isResend ? 'Resend' : 'Send'} to ${count ?? 0}`)}
           </button>
         </footer>
       </div>
