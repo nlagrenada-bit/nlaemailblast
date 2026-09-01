@@ -8,15 +8,6 @@
   # shared/ lives outside the functions directory, so tell the bundler to follow it
   included_files = ["shared/**"]
 
-# Function routes must be matched BEFORE the SPA catch-all below, or calls to
-# /api/... fall through to index.html and the function never runs. Netlify
-# evaluates redirects in order, so these come first.
-[[redirects]]
-  from = "/api/*"
-  to = "/.netlify/functions/:splat"
-  status = 200
-  force = true
-
 [[redirects]]
   from = "/*"
   to = "/index.html"
