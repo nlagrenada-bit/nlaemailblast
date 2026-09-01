@@ -93,14 +93,23 @@ export default async (request) => {
     return json({ error: recErr.message }, 500);
   }
 
-  // Kick off the chain. Each slice sends a few, then re-invokes itself until
-  // done — no background function needed, works on any Netlify plan.
+  // Kick off the chain. We AWAIT the first slice's start (not its completion) —
+  // a fire-and-forget fetch can be killed when the function returns, which left
+  // runs stuck at 'queued'. We give it a short timeout: the slice returns 200
+  // quickly after starting its work, or we let it run on. Either way the run is
+  // moving before we respond.
   const base = process.env.URL || `https://${request.headers.get('host')}`;
-  fetch(`${base}/api/send-blast-slice`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ runId: run.id, drawDate }),
-  }).catch((e) => console.error('slice invoke failed:', e.message));
+  try {
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), 3000);   // don't wait for the whole slice
+    await fetch(`${base}/api/send-blast-slice`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ runId: run.id, drawDate }),
+      signal: ctrl.signal,
+    }).catch(() => {});   // abort/ё network errors are fine — the slice is running server-side
+    clearTimeout(t);
+  } catch { /* ignore — the slice was invoked */ }
 
   return json({
     runId: run.id,

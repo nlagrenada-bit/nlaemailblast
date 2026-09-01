@@ -113,7 +113,7 @@ export default async (request) => {
       const c = await counts();
       await setRun({ sent_count: c.sent, failed_count: c.failed });
       transporter.close();
-      chainNext(request, runId, drawDate);      // more external may remain
+      await chainNext(request, runId, drawDate);      // more external may remain
       return json({ slice: 'external', sent: extPending.length });
     }
 
@@ -167,13 +167,19 @@ export default async (request) => {
   }
 };
 
-// Fire the next slice without waiting for it. The chain continues server-side.
-function chainNext(request, runId, drawDate) {
+// Fire the next slice. We await just the handoff (with a short timeout) so the
+// invocation reliably leaves before this function returns — a bare
+// fire-and-forget fetch can be killed on return, stalling the chain. Aborting
+// the client side does not stop the server-side slice from running.
+async function chainNext(request, runId, drawDate) {
   const base = process.env.URL || `https://${request.headers.get('host')}`;
-  fetch(`${base}/api/send-blast-slice`, {
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), 3000);
+  await fetch(`${base}/api/send-blast-slice`, {
     method: 'POST', headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ runId, drawDate }),
-  }).catch((e) => console.error('chain invoke failed:', e.message));
+    body: JSON.stringify({ runId, drawDate }), signal: ctrl.signal,
+  }).catch(() => {});
+  clearTimeout(t);
 }
 
 async function buildMessage(admin, drawDate) {
