@@ -14,14 +14,14 @@ const json = (b, s = 200) =>
 
 const INTERNAL_DOMAIN = '@nla.gd';
 
-// Rough estimate for the operator: external throttled at BATCH_SIZE/interval,
-// plus the internal pause.
+// Estimate for the operator: external throttled at ~20/min via chained slices,
+// plus a moment for the internal CC.
 function estimateMinutes(externalCount) {
-  const size = Number(process.env.BATCH_SIZE || 5);
-  const gapMs = Number(process.env.BATCH_INTERVAL_MS || 15_000);
-  const bursts = Math.max(0, Math.ceil(externalCount / size) - 1);
-  const internalPauseMs = Number(process.env.INTERNAL_DELAY_MS || 60_000);
-  return Math.max(1, Math.ceil((bursts * gapMs + internalPauseMs) / 60_000));
+  const perSlice = Number(process.env.SLICE_EXTERNAL || 6);
+  const gapMs = Number(process.env.SLICE_GAP_MS || 3000);
+  const perSliceSeconds = perSlice * (gapMs / 1000);
+  const slices = Math.ceil(externalCount / perSlice);
+  return Math.max(1, Math.ceil((slices * perSliceSeconds) / 60) + 1);
 }
 
 export default async (request) => {
@@ -93,13 +93,14 @@ export default async (request) => {
     return json({ error: recErr.message }, 500);
   }
 
-  // Hand off to the background function. We don't await its completion.
+  // Kick off the chain. Each slice sends a few, then re-invokes itself until
+  // done — no background function needed, works on any Netlify plan.
   const base = process.env.URL || `https://${request.headers.get('host')}`;
-  fetch(`${base}/.netlify/functions/send-blast-background`, {
+  fetch(`${base}/api/send-blast-slice`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ runId: run.id, drawDate }),
-  }).catch((e) => console.error('background invoke failed:', e.message));
+  }).catch((e) => console.error('slice invoke failed:', e.message));
 
   return json({
     runId: run.id,

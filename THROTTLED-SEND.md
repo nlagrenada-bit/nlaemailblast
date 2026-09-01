@@ -48,9 +48,10 @@ rate: `BATCH_SIZE / (BATCH_INTERVAL_MS/1000) * 60` must stay well under 30.
 
 ## Verify before you trust it
 
-- **Background functions on your Netlify plan.** The `-background` suffix needs
-  a plan that supports it. If `/.netlify/functions/send-blast-background` 404s,
-  that's the cause — check the plan before the first live run.
+- **No background function needed.** The send uses a self-chaining regular
+  function (`send-blast-slice`): each call sends ~6 messages in ~18s, then
+  re-invokes itself for the next slice until done. Works on any Netlify plan and
+  stays under the 26s function limit. Progress moves in the UI as slices land.
 - **First live run**, watch a run row fill in:
   ```sql
   select status, sent_count, failed_count, error_message
