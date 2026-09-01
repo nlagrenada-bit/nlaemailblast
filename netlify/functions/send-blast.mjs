@@ -1,152 +1,112 @@
-// POST /api/send-blast   { blastId }
+// netlify/functions/send-blast.mjs
 //
-// The browser never sends mail directly. It saves a draft blast (subject,
-// html, text, audience) and calls this. That way the exact bytes an operator
-// approved in the preview are the bytes that go out, and the provider key
-// stays server-side.
+// Trigger endpoint. It no longer sends mail itself — it validates, builds the
+// recipient list (splitting internal @nla.gd staff from external media houses),
+// records a blast_runs row, and hands off to send-blast-background.mjs, which
+// does the throttled send over several minutes. Returns 202 + a runId that the
+// browser polls for progress.
 
 import { requireStaff } from './lib/supabaseAdmin.mjs';
-import { mailer, batches, sleep } from './lib/mailer.mjs';
-import { pushResultsToWebsite } from './lib/websiteWebhook.mjs';
+import { createClient } from '@supabase/supabase-js';
 
-const json = (body, status = 200) =>
-  new Response(JSON.stringify(body), {
-    status, headers: { 'content-type': 'application/json' },
-  });
+const json = (b, s = 200) =>
+  new Response(JSON.stringify(b), { status: s, headers: { 'content-type': 'application/json' } });
+
+const INTERNAL_DOMAIN = '@nla.gd';
+
+// Rough estimate for the operator: external throttled at BATCH_SIZE/interval,
+// plus the internal pause.
+function estimateMinutes(externalCount) {
+  const size = Number(process.env.BATCH_SIZE || 5);
+  const gapMs = Number(process.env.BATCH_INTERVAL_MS || 15_000);
+  const bursts = Math.max(0, Math.ceil(externalCount / size) - 1);
+  const internalPauseMs = Number(process.env.INTERNAL_DELAY_MS || 60_000);
+  return Math.max(1, Math.ceil((bursts * gapMs + internalPauseMs) / 60_000));
+}
 
 export default async (request) => {
   if (request.method !== 'POST') return json({ error: 'Use POST.' }, 405);
 
+  // Role gate — approver or admin only.
   const auth = await requireStaff(request);
   if (auth.error) return json({ error: auth.error }, auth.status);
-  const { db, user, staff } = auth;
-
-  if (!['approver', 'admin'].includes(staff.role)) {
+  if (!['approver', 'admin'].includes(auth.staff.role)) {
     return json({ error: 'Only an approver or admin can send a blast.' }, 403);
   }
 
-  let payload;
-  try { payload = await request.json(); } catch { return json({ error: 'Send a JSON body.' }, 400); }
-  const { blastId } = payload || {};
-  if (!blastId) return json({ error: 'blastId is required.' }, 400);
+  let body;
+  try { body = await request.json(); } catch { return json({ error: 'Send a JSON body.' }, 400); }
+  const drawDate = (body?.drawDate || body?.draw_date || '').trim();
+  if (!drawDate) return json({ error: 'drawDate is required.' }, 400);
 
-  const { data: blast, error: readErr } = await db
-    .from('blasts').select('*').eq('id', blastId).single();
-  if (readErr || !blast) return json({ error: 'That blast no longer exists.' }, 404);
-  if (['sending', 'sent'].includes(blast.status)) {
-    return json({ error: `This blast is already ${blast.status}.` }, 409);
-  }
+  const admin = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY,
+    { auth: { persistSession: false } });
 
-  // Claim it before doing anything slow, so a double-click can't send twice.
-  const { data: claimed } = await db.from('blasts')
-    .update({ status: 'sending', approved_by: user.id })
-    .eq('id', blastId).in('status', ['draft', 'queued', 'failed'])
-    .select('id').maybeSingle();
-  if (!claimed) return json({ error: 'Another sender already picked this up.' }, 409);
+  // Resolve the audience now, at send time.
+  const groupIds = body?.groupIds || null;
+  const explicit = body?.emails || null;   // ad-hoc "pick specific addresses"
 
-  // Resolve the audience at send time, so removals since drafting are honoured.
-  let emails;
-  if (blast.explicit_emails?.length) {
-    // Ad-hoc "pick specific addresses" send — use exactly those, but still
-    // screen out any that have since become inactive/unsubscribed/bounced.
-    const { data: ok } = await db.from('recipients')
-      .select('email')
-      .in('email', blast.explicit_emails)
+  let recipients;
+  if (explicit?.length) {
+    const { data } = await admin.from('recipients')
+      .select('email').in('email', explicit)
       .eq('active', true).eq('unsubscribed', false).is('bounced_at', null);
-    emails = [...new Set((ok || []).map((r) => r.email))];
+    recipients = (data || []).map((r) => r.email);
   } else {
-    let { data: people, error: recErr } = await db.from('recipients')
+    let { data: people } = await admin.from('recipients')
       .select('email, recipient_group_members(group_id)')
       .eq('active', true).eq('unsubscribed', false).is('bounced_at', null);
-    if (recErr) {
-      await db.from('blasts').update({ status: 'failed', error: recErr.message }).eq('id', blastId);
-      return json({ error: 'Could not load the recipient list.' }, 500);
+    if (groupIds?.length) {
+      const want = new Set(groupIds);
+      people = (people || []).filter((p) =>
+        (p.recipient_group_members || []).some((m) => want.has(m.group_id)));
     }
-    if (blast.group_ids?.length) {
-      const wanted = new Set(blast.group_ids);
-      people = people.filter((p) =>
-        (p.recipient_group_members || []).some((m) => wanted.has(m.group_id)));
-    }
-    emails = [...new Set(people.map((p) => p.email))];
+    recipients = (people || []).map((p) => p.email);
+  }
+  recipients = [...new Set(recipients)];
+
+  if (!recipients.length) {
+    return json({ error: 'No active recipients matched this audience.' }, 422);
   }
 
-  if (!emails.length) {
-    await db.from('blasts').update({
-      status: 'failed', error: 'No active recipients matched this audience.',
-    }).eq('id', blastId);
-    return json({ error: 'No active recipients matched this audience.' }, 400);
+  // Split internal (tenant-local, CC'd) from external (throttled per-recipient).
+  const rows = recipients.map((email) => ({
+    email,
+    is_internal: email.toLowerCase().endsWith(INTERNAL_DOMAIN),
+  }));
+  const externalCount = rows.filter((r) => !r.is_internal).length;
+
+  // Create the run and its per-recipient rows.
+  const { data: run, error: runErr } = await admin.from('blast_runs').insert({
+    draw_date: drawDate,
+    triggered_by: auth.staff.id,
+    status: 'queued',
+    total_recipients: rows.length,
+  }).select().single();
+  if (runErr) return json({ error: runErr.message }, 500);
+
+  const { error: recErr } = await admin.from('blast_recipients')
+    .insert(rows.map((r) => ({ run_id: run.id, email: r.email, is_internal: r.is_internal })));
+  if (recErr) {
+    await admin.from('blast_runs').update({ status: 'failed', error_message: recErr.message })
+      .eq('id', run.id);
+    return json({ error: recErr.message }, 500);
   }
 
-  const from = process.env.MAIL_FROM;
-  if (!from) {
-    await db.from('blasts').update({ status: 'failed', error: 'MAIL_FROM is not set' }).eq('id', blastId);
-    return json({ error: 'MAIL_FROM is not configured on the site.' }, 500);
-  }
+  // Hand off to the background function. We don't await its completion.
+  const base = process.env.URL || `https://${request.headers.get('host')}`;
+  fetch(`${base}/.netlify/functions/send-blast-background`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ runId: run.id, drawDate }),
+  }).catch((e) => console.error('background invoke failed:', e.message));
 
-  const send = mailer().send;
-  const envelope = process.env.MAIL_ENVELOPE || from;   // the visible To:
-  let sent = 0, failed = 0;
-  const rows = [];
-
-  for (const group of batches(emails)) {
-    const res = await send({
-      from,
-      replyTo: process.env.MAIL_REPLY_TO,
-      to: [envelope],
-      bcc: group,                // recipients never see each other
-      subject: blast.subject,
-      html: blast.html,
-      text: blast.text_body,
-    });
-    if (res.error) {
-      failed += group.length;
-      rows.push(...group.map((e) => ({ blast_id: blastId, email: e, status: 'failed', error: res.error })));
-    } else {
-      sent += group.length;
-      rows.push(...group.map((e) => ({ blast_id: blastId, email: e, status: 'sent', provider_id: res.id })));
-    }
-    await sleep(Number(process.env.BATCH_DELAY_MS || 600));   // stay inside provider rate limits
-  }
-
-  for (let i = 0; i < rows.length; i += 500) {
-    await db.from('blast_deliveries').insert(rows.slice(i, i + 500));
-  }
-
-  const status = failed === 0 ? 'sent' : (sent === 0 ? 'failed' : 'sent');
-  await db.from('blasts').update({
-    status,
-    recipient_count: emails.length,
-    sent_count: sent,
-    failed_count: failed,
-    sent_at: new Date().toISOString(),
-    error: failed ? `${failed} address(es) were rejected by the provider.` : null,
-  }).eq('id', blastId);
-
-  // Push the published results to the NLA website (if configured). This runs
-  // after the email is sent and never blocks or fails the blast: a website
-  // problem must not stop staff getting results out by email. Any failures are
-  // recorded on the blast row for follow-up.
-  let website;
-  if (sent > 0) {
-    try {
-      const [daily, cashPops, lotto, super6] = await Promise.all([
-        db.from('daily_results').select('*').eq('draw_date', blast.draw_date).then((r) => r.data || []),
-        db.from('cash_pop_results').select('*').eq('draw_date', blast.draw_date).then((r) => r.data || []),
-        db.from('lotto_results').select('*').eq('draw_date', blast.draw_date).maybeSingle().then((r) => r.data),
-        db.from('super6_results').select('*').eq('draw_date', blast.draw_date).maybeSingle().then((r) => r.data),
-      ]);
-      website = await pushResultsToWebsite({ date: blast.draw_date, daily, cashPops, lotto, super6 });
-      if (website?.failed?.length) {
-        await db.from('blasts').update({
-          error: `${website.failed.length} result(s) failed to reach the website.`,
-        }).eq('id', blastId);
-      }
-    } catch (e) {
-      website = { error: e.message };
-    }
-  }
-
-  return json({ ok: true, sent, failed, recipients: emails.length, website });
+  return json({
+    runId: run.id,
+    totalRecipients: rows.length,
+    externalRecipients: externalCount,
+    estimatedMinutes: estimateMinutes(externalCount),
+  }, 202);
 };
 
 export const config = { path: '/api/send-blast' };

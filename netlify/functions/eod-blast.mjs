@@ -46,12 +46,31 @@ export default async () => {
 
   const doc = buildDoc({ date, kind: 'eod', daily, cashPops, lotto, super6, settings, day });
   const check = validateDoc(doc);
-  if (!check.ok) {
-    await notifyDesk(`NLA end-of-day blast not staged for ${longDate(date)}`,
-      `The nightly job could not build the complete results:\n\n`
-      + check.errors.map((e) => `  - ${e}`).join('\n')
-      + `\n\nEnter the missing results and send from the app.`);
-    return new Response(JSON.stringify({ error: check.errors, date }), { status: 200 });
+
+  // Beyond the structural validation, the nightly job must not send a day that
+  // is still missing its late draws — the Evening daily draw (7:45pm) and the
+  // Prime-Time Pop (8:45pm) are the ones most likely not yet entered when the
+  // job runs. If a scheduled draw's results aren't in, hold and tell the desk
+  // rather than sending an incomplete "complete day".
+  const lateMissing = [];
+  if (scheduled.daily) {
+    const evening = daily.find((r) => r.period === 'evening');
+    if (!evening || evening.play_way_number == null) lateMissing.push('Evening Draw (7:45pm) results');
+  }
+  if (scheduled.cash_pop) {
+    const prime = cashPops.find((r) => r.period === 'prime_time');
+    if (!prime || prime.number == null) lateMissing.push('Prime-Time Pop (8:45pm) result');
+  }
+
+  if (!check.ok || lateMissing.length) {
+    const reasons = [...check.errors, ...lateMissing.map((m) => `Missing: ${m}`)];
+    await notifyDesk(`NLA end-of-day blast NOT sent for ${longDate(date)} — results incomplete`,
+      `The nightly job did not send the complete-day results because the day isn't finished:\n\n`
+      + reasons.map((e) => `  - ${e}`).join('\n')
+      + `\n\nEnter the missing results in the app, then send the complete day from the Results tab `
+      + `(select "Whole day") or approve the draft in History. Nothing was sent, so no incomplete `
+      + `email went out.`);
+    return new Response(JSON.stringify({ held: true, reasons, date }), { status: 200 });
   }
 
   const { subject, html, text } = buildEmail(doc, {
@@ -98,4 +117,7 @@ async function notifyDesk(subject, text) {
 // forward by one: Mon-Sat AST -> Tue-Sun UTC. Cron day-of-week is 0-6 (0=Sun),
 // and 7 is out of range and rejected by Netlify, so Sunday is written as 0:
 // '2-6,0' = Tue,Wed,Thu,Fri,Sat,Sun UTC = Mon-Sat 21:00 AST.
-export const config = { schedule: '0 1 * * 2-6,0' };
+// Runs at 02:30 UTC = 10:30 PM AST, Mon–Sun. That's ~1h45m after the last
+// draw of the day (Prime-Time Pop at 8:45 PM), leaving room for the Evening
+// and Prime-Time results to be entered before the complete-day blast is built.
+export const config = { schedule: '30 2 * * *' };

@@ -177,7 +177,10 @@ export const listBlasts = (limit = 60) =>
 export const getBlast = (id) =>
   supabase.from('blasts').select('*').eq('id', id).single().then(unwrap);
 
-export async function sendBlast(blastId) {
+// Triggers a throttled send. Returns { runId, totalRecipients, estimatedMinutes }
+// immediately (HTTP 202); the actual send runs server-side over several minutes.
+// Poll the run with watchBlastRun() for progress.
+export async function sendBlast({ drawDate, groupIds = null, emails = null }) {
   const { data: { session } } = await supabase.auth.getSession();
   const res = await fetch('/api/send-blast', {
     method: 'POST',
@@ -185,11 +188,31 @@ export async function sendBlast(blastId) {
       'content-type': 'application/json',
       authorization: `Bearer ${session?.access_token ?? ''}`,
     },
-    body: JSON.stringify({ blastId }),
+    body: JSON.stringify({ drawDate, groupIds, emails }),
   });
   const body = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(body.error || 'The blast could not be sent.');
-  return body;
+  if (!res.ok) throw new Error(body.error || 'The blast could not be started.');
+  return body;   // 202 + { runId, totalRecipients, estimatedMinutes }
+}
+
+// Polls a blast_runs row until it completes or fails, calling onProgress with
+// each snapshot. Returns the final row. Sends continue server-side even if the
+// browser closes — this only watches.
+export function watchBlastRun(runId, onProgress, intervalMs = 5000) {
+  return new Promise((resolve, reject) => {
+    const tick = async () => {
+      const { data, error } = await supabase.from('blast_runs').select('*').eq('id', runId).single();
+      if (error) return;   // transient — try again next tick
+      onProgress?.(data);
+      if (data.status === 'complete' || data.status === 'failed') {
+        clearInterval(timer);
+        if (data.status === 'failed') reject(new Error(data.error_message || 'The send failed.'));
+        else resolve(data);
+      }
+    };
+    const timer = setInterval(tick, intervalMs);
+    tick();
+  });
 }
 
 // ---------------------------------------------------------------- settings

@@ -10,7 +10,7 @@ import { countAudience, listSendable } from '../lib/api.js';
  * deliberate: a blast cannot be recalled.
  */
 export default function SendDialog({
-  open, onClose, onConfirm, email, date, label, groups, warnings = [], busy,
+  open, onClose, onConfirm, email, date, label, groups, warnings = [], busy, progress,
 }) {
   const [mode, setMode] = useState('everyone');    // 'everyone' | 'groups' | 'pick'
   const [groupIds, setGroupIds] = useState([]);
@@ -185,8 +185,19 @@ export default function SendDialog({
           </div>
         </div>
 
+        {busy && progress && (
+          <div className="notice" style={{ margin: '0 0 4px' }}>
+            <div>
+              Sending… <strong>{progress.sent} of {progress.total}</strong> so far.
+              This continues on the server even if you close the window.
+            </div>
+          </div>
+        )}
+
         <footer>
-          <button className="btn ghost" onClick={onClose} disabled={busy}>Cancel</button>
+          <button className="btn ghost" onClick={onClose} disabled={busy}>
+            {busy ? 'Close (send continues)' : 'Cancel'}
+          </button>
           <button className="btn send" disabled={!ready} onClick={confirm}>
             {busy ? 'Sending…' : `${isResend ? 'Resend' : 'Send'} to ${count ?? 0}`}
           </button>

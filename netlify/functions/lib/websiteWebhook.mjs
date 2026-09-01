@@ -9,7 +9,81 @@
 
 const PERIODS_WITH = new Set(['play_way', 'pick3', 'cash4', 'cash_pop']);
 
+// The website's own database uses these Cash Pop period names (mapped by time),
+// its own table names, and comma-joined winning numbers. We include a ready-to-
+// store `db` block on each payload so their receiver can insert directly without
+// re-deriving anything. Source of truth: their live schema (25 Aug 2026).
+const POP_PERIOD_TO_SITE = {
+  kick_off: 'Morning', lunch: 'Midday', mid_rush: 'Afternoon',
+  after_work: 'Evening', prime_time: 'Night',
+};
+const SITE_TABLE = {
+  play_way: 'playway', pick3: 'dailypick3', cash4: 'cash4',
+  cash_pop: 'cashpop', lotto: 'lotto', super6: 'super6',
+};
+const pad2 = (n) => String(n).padStart(2, '0');
+
 /** Build the array of per-game payloads for one day's document rows. */
+/**
+ * Map one result to the website's own table + columns, so their endpoint can
+ * store it with a plain upsert. draw_date carries the time (identifies which
+ * daily draw). Numbers are comma-joined to match their existing records.
+ */
+function siteRow(game, drawNo, period, date, r) {
+  const table = SITE_TABLE[game];
+  const common = { draw_number: drawNo ?? 0, description: '' };
+  if (game === 'lotto' || game === 'super6') {
+    return {
+      table, conflict: 'draw_number',
+      row: {
+        ...common,
+        draw_date: `${date} 19:45:00`,
+        winning_numbers: (r.numbers || []).map(pad2).join(','),
+        winning_letter: r.free_ticket_letter || '',
+        jackpot: r.jackpot_amount ?? 0,
+        multiplier: '',
+      },
+    };
+  }
+  if (game === 'play_way') {
+    return {
+      table, conflict: 'draw_number',
+      row: {
+        ...common,
+        draw_date: `${date} ${timeFor(period)}`,
+        winning_numbers: String(r.number ?? ''),
+        multiplier: r.multiplier || '',
+        jackpot: 0,
+      },
+    };
+  }
+  if (game === 'pick3' || game === 'cash4') {
+    return {
+      table, conflict: 'draw_number',
+      row: {
+        ...common,
+        draw_date: `${date} ${timeFor(period)}`,
+        winning_numbers: (r.digits || []).join(','),
+        multiplier: r.multiplier || '',
+      },
+    };
+  }
+  // cash_pop — dedupe on (draw_date, draw_period)
+  return {
+    table, conflict: 'draw_date,draw_period',
+    row: {
+      draw_number: drawNo ?? 0, description: '',
+      draw_date: `${date} ${timeFor(period)}`,
+      draw_period: POP_PERIOD_TO_SITE[period] || '',
+      winning_number: r.number ?? null,
+    },
+  };
+}
+
+const DAILY_TIME = { mid_morning: '09:45:00', midday: '12:45:00', mid_afternoon: '16:45:00', evening: '19:45:00' };
+const POP_TIME = { kick_off: '08:45:00', lunch: '11:45:00', mid_rush: '14:45:00', after_work: '17:45:00', prime_time: '20:45:00' };
+const timeFor = (period) => DAILY_TIME[period] || POP_TIME[period] || '00:00:00';
+
 export function buildWebhookPayloads({ date, daily = [], cashPops = [], lotto = null, super6 = null }) {
   const out = [];
   const now = new Date().toISOString();
@@ -21,6 +95,9 @@ export function buildWebhookPayloads({ date, daily = [], cashPops = [], lotto = 
     ...(PERIODS_WITH.has(game) ? { period } : {}),
     published_at: now,
     result,
+    // Ready-to-store mapping to the website's own tables/columns. Their receiver
+    // can insert `db.row` into `db.table`, upserting on `db.conflict`.
+    db: siteRow(game, drawNo, period, date, result),
   });
 
   for (const row of daily) {

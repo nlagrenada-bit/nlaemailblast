@@ -40,6 +40,7 @@ export default function ResultsView({ date, settings, groups, canSend }) {
   const [includeEarlierPops, setIncludeEarlierPops] = useState(false);
   const [dialog, setDialog] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [progress, setProgress] = useState(null);
   const [saving, setSaving] = useState(false);
 
   const [nextNos, setNextNos] = useState({});
@@ -196,31 +197,35 @@ export default function ResultsView({ date, settings, groups, canSend }) {
 
   async function confirmSend({ groupIds, emails, isResend }) {
     setBusy(true);
+    setProgress(null);
     try {
-      // A resend marks the subject so recipients know it supersedes the earlier
-      // email; the RESENT banner in the body is handled by the email builder.
-      const subject = isResend ? `[RESENT] ${email.subject}` : email.subject;
-      const html = isResend ? markResent(email.html) : email.html;
-      const text = isResend ? `*** RESENT — corrects earlier results ***\n\n${email.text}` : email.text;
-
-      const blast = await api.createBlast({
-        draw_date: date, kind: scope.kind, label: scope.label,
-        subject, html, text_body: text,
-        group_ids: groupIds?.length ? groupIds : null,
-        explicit_emails: emails?.length ? emails : null,
-        is_resend: !!isResend,
-        status: 'draft',
+      // Start the throttled send. It runs server-side over several minutes and
+      // returns immediately with a run id to watch.
+      const started = await api.sendBlast({
+        drawDate: date,
+        groupIds: groupIds?.length ? groupIds : null,
+        emails: emails?.length ? emails : null,
       });
-      const res = await api.sendBlast(blast.id);
-      const bits = [`Sent to ${res.sent} recipient${res.sent === 1 ? '' : 's'}`];
-      if (res.failed) bits.push(`${res.failed} failed`);
-      if (res.website?.failed?.length) bits.push(`${res.website.failed.length} website update(s) failed`);
-      toast(bits.join(' · ') + '.', res.failed ? 'info' : 'good');
+      toast(
+        `Sending to ${started.totalRecipients} recipient${started.totalRecipients === 1 ? '' : 's'}. `
+        + `About ${started.estimatedMinutes} min — it continues even if you close this.`,
+        'good',
+      );
+      setProgress({ sent: 0, total: started.totalRecipients });
+
+      // Watch progress; the send keeps going regardless of this poller.
+      const final = await api.watchBlastRun(started.runId, (run) => {
+        setProgress({ sent: run.sent_count, total: run.total_recipients, status: run.status });
+      });
+
+      const bits = [`Sent to ${final.sent_count} of ${final.total_recipients}`];
+      if (final.failed_count) bits.push(`${final.failed_count} failed`);
+      toast(bits.join(' · ') + '.', final.failed_count ? 'info' : 'good');
       setDialog(false);
       reload();
     } catch (e) {
       toast(e.message, 'bad');
-    } finally { setBusy(false); }
+    } finally { setBusy(false); setProgress(null); }
   }
 
   async function saveDraft() {
@@ -306,7 +311,7 @@ export default function ResultsView({ date, settings, groups, canSend }) {
       <SendDialog
         open={dialog} onClose={() => setDialog(false)} onConfirm={confirmSend}
         email={email} date={date} label={scope.label} groups={groups}
-        warnings={check.warnings} busy={busy}
+        warnings={check.warnings} busy={busy} progress={progress}
       />
     </>
   );
