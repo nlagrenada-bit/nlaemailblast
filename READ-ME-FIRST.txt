@@ -1,0 +1,49 @@
+FIX: single-draw send went out as the complete day's results
+=============================================================
+
+WHAT WENT WRONG
+When I rebuilt the sender for throttling, the trigger stopped passing the
+operator's selection — it sent only the draw date. The sender then rebuilt the
+email server-side with kind='eod' HARDCODED, so every send became the full
+end-of-day results regardless of what was selected. Selecting the Afternoon Pop
+sent the whole day. This also silently broke the RESENT banner.
+
+THE FIX
+The browser already builds the exact email it shows in the preview. That message
+is now stored on the run and sent unchanged. The server never rebuilds it, so
+what you preview is what sends — one draw, a whole day, or a resend.
+
+DEPLOY — in this order
+----------------------
+1. Run supabase/07_blast_run_message.sql in the Supabase SQL editor.
+   (Adds subject/html/text_body/scope_label/scope_kind/is_resend to blast_runs.)
+
+2. Replace these two files in the app repo:
+     netlify/functions/send-blast.mjs
+     netlify/functions/send-blast-slice.mjs
+
+3. Apply the two code snippets:
+     src-lib-api-sendBlast.js
+        -> replaces the sendBlast function in src/lib/api.js
+     src-views-ResultsView-confirmSend.jsx
+        -> replaces the confirmSend function in src/views/ResultsView.jsx
+
+4. Commit and push:
+     git add -A
+     git commit -m "Send the previewed email, not a rebuilt end-of-day document"
+     git push
+
+VERIFY AFTER DEPLOY
+-------------------
+Select ONE draw (e.g. Afternoon Pop), open the send dialog, and check the
+preview shows only that draw. Send to one address you control and confirm the
+email matches. Then check the run recorded what was selected:
+
+  select scope_kind, scope_label, is_resend, left(subject,60) as subject
+  from blast_runs order by started_at desc limit 5;
+
+scope_label should read the draw you chose, not "Whole day".
+
+ALSO FIXED
+- The RESENT subject prefix and red banner work again.
+- History can now show which draw each blast covered (scope_label).

@@ -1,10 +1,12 @@
 // netlify/functions/send-blast.mjs
 //
-// Trigger endpoint. It no longer sends mail itself — it validates, builds the
-// recipient list (splitting internal @nla.gd staff from external media houses),
-// records a blast_runs row, and hands off to send-blast-background.mjs, which
-// does the throttled send over several minutes. Returns 202 + a runId that the
-// browser polls for progress.
+// Trigger endpoint. Validates, resolves the audience, records a blast_runs row
+// INCLUDING THE EXACT MESSAGE the operator previewed, then hands off to
+// send-blast-slice.mjs which does the throttled send.
+//
+// The message is built in the browser (the same code that renders the preview)
+// and stored here. The sender never rebuilds it. That is what guarantees a
+// single-draw send goes out as that draw, not as the whole day.
 
 import { requireStaff } from './lib/supabaseAdmin.mjs';
 import { createClient } from '@supabase/supabase-js';
@@ -14,20 +16,16 @@ const json = (b, s = 200) =>
 
 const INTERNAL_DOMAIN = '@nla.gd';
 
-// Estimate for the operator: external throttled at ~20/min via chained slices,
-// plus a moment for the internal CC.
 function estimateMinutes(externalCount) {
   const perSlice = Number(process.env.SLICE_EXTERNAL || 6);
   const gapMs = Number(process.env.SLICE_GAP_MS || 3000);
-  const perSliceSeconds = perSlice * (gapMs / 1000);
   const slices = Math.ceil(externalCount / perSlice);
-  return Math.max(1, Math.ceil((slices * perSliceSeconds) / 60) + 1);
+  return Math.max(1, Math.ceil((slices * perSlice * (gapMs / 1000)) / 60) + 1);
 }
 
 export default async (request) => {
   if (request.method !== 'POST') return json({ error: 'Use POST.' }, 405);
 
-  // Role gate — approver or admin only.
   const auth = await requireStaff(request);
   if (auth.error) return json({ error: auth.error }, auth.status);
   if (!['approver', 'admin'].includes(auth.staff.role)) {
@@ -36,15 +34,25 @@ export default async (request) => {
 
   let body;
   try { body = await request.json(); } catch { return json({ error: 'Send a JSON body.' }, 400); }
-  const drawDate = (body?.drawDate || body?.draw_date || '').trim();
+
+  const drawDate = (body?.drawDate || '').trim();
+  const subject  = (body?.subject || '').trim();
+  const html     = body?.html || '';
+  const text     = body?.text || '';
+
   if (!drawDate) return json({ error: 'drawDate is required.' }, 400);
+  // Without a message there is nothing to send — and rebuilding it here is what
+  // caused single-draw sends to go out as the whole day.
+  if (!subject || !html) {
+    return json({ error: 'The email could not be prepared. Reopen the draw and try again.' }, 400);
+  }
 
   const admin = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY,
     { auth: { persistSession: false } });
 
   // Resolve the audience now, at send time.
   const groupIds = body?.groupIds || null;
-  const explicit = body?.emails || null;   // ad-hoc "pick specific addresses"
+  const explicit = body?.emails || null;
 
   let recipients;
   if (explicit?.length) {
@@ -69,19 +77,23 @@ export default async (request) => {
     return json({ error: 'No active recipients matched this audience.' }, 422);
   }
 
-  // Split internal (tenant-local, CC'd) from external (throttled per-recipient).
   const rows = recipients.map((email) => ({
     email,
     is_internal: email.toLowerCase().endsWith(INTERNAL_DOMAIN),
   }));
   const externalCount = rows.filter((r) => !r.is_internal).length;
 
-  // Create the run and its per-recipient rows.
   const { data: run, error: runErr } = await admin.from('blast_runs').insert({
     draw_date: drawDate,
     triggered_by: auth.staff.id,
     status: 'queued',
     total_recipients: rows.length,
+    subject,
+    html,
+    text_body: text,
+    scope_label: body?.scopeLabel || null,
+    scope_kind: body?.scopeKind || null,
+    is_resend: !!body?.isResend,
   }).select().single();
   if (runErr) return json({ error: runErr.message }, 500);
 
@@ -93,23 +105,18 @@ export default async (request) => {
     return json({ error: recErr.message }, 500);
   }
 
-  // Kick off the chain. We AWAIT the first slice's start (not its completion) —
-  // a fire-and-forget fetch can be killed when the function returns, which left
-  // runs stuck at 'queued'. We give it a short timeout: the slice returns 200
-  // quickly after starting its work, or we let it run on. Either way the run is
-  // moving before we respond.
+  // Start the chain. Awaited briefly so the invocation reliably leaves before
+  // this function returns; the slice keeps running server-side regardless.
   const base = process.env.URL || `https://${request.headers.get('host')}`;
-  try {
-    const ctrl = new AbortController();
-    const t = setTimeout(() => ctrl.abort(), 3000);   // don't wait for the whole slice
-    await fetch(`${base}/api/send-blast-slice`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ runId: run.id, drawDate }),
-      signal: ctrl.signal,
-    }).catch(() => {});   // abort/ё network errors are fine — the slice is running server-side
-    clearTimeout(t);
-  } catch { /* ignore — the slice was invoked */ }
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), 3000);
+  await fetch(`${base}/api/send-blast-slice`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ runId: run.id, drawDate }),
+    signal: ctrl.signal,
+  }).catch(() => {});
+  clearTimeout(t);
 
   return json({
     runId: run.id,
