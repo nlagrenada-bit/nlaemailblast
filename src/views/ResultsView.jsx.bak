@@ -194,6 +194,7 @@ export default function ResultsView({ date, settings, groups, canSend }) {
   // -------------------------------------------------------- what to render
 
   // -------------------------------------------------------------- sending
+
   async function confirmSend({ groupIds, emails, isResend, dbOnly }) {
     setBusy(true);
     setProgress(null);
@@ -210,39 +211,28 @@ export default function ResultsView({ date, settings, groups, canSend }) {
         return;
       }
 
-      // The email built for THIS selection - the same one shown in the preview,
-      // so a single draw sends that draw and not the whole day.
-      const subject = isResend ? `[RESENT] ${email.subject}` : email.subject;
-      const html    = isResend ? markResent(email.html) : email.html;
-      const text    = isResend
-        ? `*** RESENT - corrects earlier results ***\n\n${email.text}`
-        : email.text;
-
+      // Start the throttled send. It runs server-side over several minutes and
+      // returns immediately with a run id to watch.
       const started = await api.sendBlast({
         drawDate: date,
-        subject, html, text,
-        scopeLabel: scope.label,
-        scopeKind: scope.kind,
-        isResend: !!isResend,
         groupIds: groupIds?.length ? groupIds : null,
         emails: emails?.length ? emails : null,
       });
-
       toast(
-        `Sending "${scope.label}" to ${started.totalRecipients} recipient`
-        + `${started.totalRecipients === 1 ? '' : 's'}. `
-        + `About ${started.estimatedMinutes} min - it continues even if you close this.`,
+        `Sending to ${started.totalRecipients} recipient${started.totalRecipients === 1 ? '' : 's'}. `
+        + `About ${started.estimatedMinutes} min — it continues even if you close this.`,
         'good',
       );
       setProgress({ sent: 0, total: started.totalRecipients });
 
+      // Watch progress; the send keeps going regardless of this poller.
       const final = await api.watchBlastRun(started.runId, (run) => {
         setProgress({ sent: run.sent_count, total: run.total_recipients, status: run.status });
       });
 
       const bits = [`Sent to ${final.sent_count} of ${final.total_recipients}`];
       if (final.failed_count) bits.push(`${final.failed_count} failed`);
-      toast(bits.join(' \u00b7 ') + '.', final.failed_count ? 'info' : 'good');
+      toast(bits.join(' · ') + '.', final.failed_count ? 'info' : 'good');
       setDialog(false);
       reload();
     } catch (e) {

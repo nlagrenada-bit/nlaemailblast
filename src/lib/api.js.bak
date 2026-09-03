@@ -180,11 +180,7 @@ export const getBlast = (id) =>
 // Triggers a throttled send. Returns { runId, totalRecipients, estimatedMinutes }
 // immediately (HTTP 202); the actual send runs server-side over several minutes.
 // Poll the run with watchBlastRun() for progress.
-export async function sendBlast({
-  drawDate, subject, html, text,
-  scopeLabel = null, scopeKind = null, isResend = false,
-  groupIds = null, emails = null,
-}) {
+export async function sendBlast({ drawDate, groupIds = null, emails = null }) {
   const { data: { session } } = await supabase.auth.getSession();
   const res = await fetch('/api/send-blast', {
     method: 'POST',
@@ -192,15 +188,11 @@ export async function sendBlast({
       'content-type': 'application/json',
       authorization: `Bearer ${session?.access_token ?? ''}`,
     },
-    body: JSON.stringify({
-      drawDate, subject, html, text,
-      scopeLabel, scopeKind, isResend,
-      groupIds, emails,
-    }),
+    body: JSON.stringify({ drawDate, groupIds, emails }),
   });
   const body = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(body.error || 'The blast could not be started.');
-  return body;
+  return body;   // 202 + { runId, totalRecipients, estimatedMinutes }
 }
 
 // Polls a blast_runs row until it completes or fails, calling onProgress with
