@@ -245,3 +245,133 @@ export async function nextExpected(game) {
   const res = await fetch(`${BASE()}/results/${path}/next`, { headers: headers() });
   return res.ok ? res.json() : { error: `${res.status} ${await res.text().catch(() => '')}` };
 }
+
+// ---------------------------------------------------------------------------
+// Jackpot updates
+//
+// The jackpot an operator enters after a Lotto or Super 6 draw is the NEW
+// figure now being played for, which is what the portal's jackpot column
+// holds. Correcting it is a change to the LAST STORED draw, so it needs a PUT.
+//
+// This works even when the app has no local row for that draw: it reads the
+// stored draw back from the portal, merges the new jackpot, and PUTs the whole
+// record. That matters because the portal's PUT expects the full payload.
+// ---------------------------------------------------------------------------
+
+
+/**
+ * Read one stored draw back from the portal so a jackpot correction can PUT the
+ * full record. The list endpoint's exact envelope isn't documented, so several
+ * shapes are accepted rather than assuming one.
+ */
+async function readStoredDraw(game, drawNumber) {
+  const path = GAME_PATH[game] || game;
+  const res = await fetch(`${BASE()}/results/${path}?limit=10`, { headers: headers() });
+  if (!res.ok) {
+    return { ok: false, error: `Could not read the stored ${game} draw (${res.status}).` };
+  }
+  let payload;
+  try { payload = await res.json(); }
+  catch { return { ok: false, error: `The portal returned an unreadable ${game} list.` }; }
+
+  // Accept: [ ... ] | {results:[...]} | {data:[...]} | {lotto:[...]} | a bare object
+  const rows =
+    Array.isArray(payload) ? payload
+    : Array.isArray(payload?.results) ? payload.results
+    : Array.isArray(payload?.data) ? payload.data
+    : Array.isArray(payload?.[path]) ? payload[path]
+    : (payload && typeof payload === 'object' && payload.winning_numbers) ? [payload]
+    : [];
+
+  if (!rows.length) {
+    return { ok: false, error: `The portal returned no ${game} draws to read back.` };
+  }
+
+  const row = rows.find((r) => Number(r.draw_number) === Number(drawNumber)) || rows[0];
+  const numbers = String(row.winning_numbers ?? '')
+    .split(/[,\s]+/).map(Number).filter((n) => Number.isFinite(n));
+
+  if (!numbers.length) {
+    return { ok: false, error: `Could not read the winning numbers for ${game} draw ${drawNumber}.` };
+  }
+  return { ok: true, numbers, letter: row.winning_letter || '' };
+}
+
+/** Read what the portal currently holds for a game. */
+export async function lastStored(game) {
+  const path = GAME_PATH[game] || game;
+  const res = await fetch(`${BASE()}/results/${path}/next`, { headers: headers() });
+  if (!res.ok) {
+    return { ok: false, error: `${res.status} ${await res.text().catch(() => '')}`.slice(0, 200) };
+  }
+  const j = await res.json();
+  return {
+    ok: true,
+    nextDrawNumber: j.next_draw_number,
+    lastDrawNumber: j.last_draw?.draw_number,
+    lastDrawDate: j.last_draw?.draw_date,
+    lastJackpot: j.last_jackpot != null ? Number(j.last_jackpot) : null,
+    slots: j.draw_time_slots || [],
+  };
+}
+
+/**
+ * Set the jackpot on the most recently stored draw for a game.
+ *
+ * @param game    'lotto' | 'super6'
+ * @param amount  the new jackpot
+ * @param opts.numbers / opts.letter  supplied when we have them locally;
+ *                otherwise the stored record is read back from the portal.
+ * @param opts.jackpotWon  true when the jackpot was won, so a lower figure is
+ *                legitimate and the portal's progression check must be told.
+ */
+export async function pushJackpot(game, amount, opts = {}) {
+  if (!BASE())  return { ok: false, error: 'WEBSITE_API_BASE not set' };
+  if (!TOKEN()) return { ok: false, error: 'WEBSITE_API_TOKEN not set' };
+
+  const jp = Number(amount);
+  if (!Number.isFinite(jp) || jp <= 0) {
+    return { ok: false, error: 'A jackpot amount is required.' };
+  }
+
+  const info = await lastStored(game);
+  if (!info.ok) return { ok: false, error: `Could not read the portal: ${info.error}` };
+  if (!info.lastDrawNumber) {
+    return { ok: false, error: `The portal has no stored ${game} draw to update.` };
+  }
+
+  if (info.lastJackpot === jp) {
+    return { ok: true, unchanged: true, drawNumber: info.lastDrawNumber, jackpot: jp,
+             note: `Already ${jp} on draw ${info.lastDrawNumber}.` };
+  }
+
+  // PUT needs the full record. Use what we hold locally if we have it,
+  // otherwise fall back to the copy the portal already stores.
+  let numbers = opts.numbers;
+  let letter  = opts.letter;
+  if (!numbers?.length) {
+    const found = await readStoredDraw(game, info.lastDrawNumber);
+    if (!found.ok) return found;
+    numbers = found.numbers;
+    letter  = found.letter;
+  }
+
+  const body = {
+    winning_numbers: numbers,
+    winning_letter: letter || '',
+    jackpot: jp,
+  };
+  if (opts.jackpotWon) body.jackpot_reset = true;
+
+  const path = GAME_PATH[game] || game;
+  const res = await fetch(`${BASE()}/results/${path}/${info.lastDrawNumber}`, {
+    method: 'PUT', headers: headers(), body: JSON.stringify(body),
+  });
+
+  if (res.ok) {
+    return { ok: true, drawNumber: info.lastDrawNumber, jackpot: jp,
+             was: info.lastJackpot, note: 'updated' };
+  }
+  const text = await res.text().catch(() => '');
+  return { ok: false, drawNumber: info.lastDrawNumber, error: summarise(res.status, text) };
+}

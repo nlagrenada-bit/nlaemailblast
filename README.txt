@@ -1,64 +1,65 @@
-JACKPOT FIX — Lotto and Super 6
-================================
+JACKPOT FROM THE APP DATABASE
+==============================
 
-THE BUG
-The app's sender had:
-
-    jackpot: lotto.jackpot_amount ?? 0
-
-If no jackpot had been entered yet, that sent 0. The portal's jackpot
-progression check refuses a jackpot lower than the previous one, so the value
-was either rejected outright or the record was stored without a usable figure.
-Either way the site's jackpot did not update.
-
-THE FIX
-The field is now OMITTED when there is no jackpot, rather than sent as 0.
-Omitting leaves the stored jackpot untouched; sending 0 destroyed it.
-
-Also added: when jackpot_winners > 0 the jackpot legitimately drops (it was
-won), so the payload now sets "jackpot_reset": true, which is what the portal
-needs to accept a lower figure.
-
-Behaviour now:
-  jackpot entered        -> "jackpot": 148000
-  jackpot not entered    -> field omitted entirely
-  jackpot won            -> "jackpot": 50000, "jackpot_reset": true
+The jackpot the operator enters in the app is now the source of truth, and can
+be pushed to the portal on its own - no winning numbers needed, no figure to
+retype.
 
 
-TWO PARTS TO APPLY
-------------------
+FIRST: FIND OUT WHERE THE TWO DISAGREE
 
-1. APP CODE  (stops it happening again)
+  POST /api/push-website     { "diagnose": true }
 
-   Replace:  netlify/functions/lib/websiteWebhook.mjs
+Returns, for lotto and super6:
 
-     git add netlify/functions/lib/websiteWebhook.mjs
-     git commit -m "Omit jackpot when unset; flag jackpot_reset when won"
-     git push
+  app     - the newest jackpot entered in the app, with its draw and date
+  portal  - what about.nla.gd currently stores, and its last/next draw number
+  match   - true or false
 
-
-2. REPAIR THE DRAWS ALREADY ON THE SITE
-
-   fix-jackpots.mjs resends the correct jackpot for the 8 Lotto and Super 6
-   draws from the catch-up, using PUT (the API's correction route) so nothing
-   is duplicated.
-
-   Keep fix-jackpots.mjs and catchup-data.json in the same folder, then:
-
-     node fix-jackpots.mjs --token YOUR_TOKEN --dry-run
-     node fix-jackpots.mjs --token YOUR_TOKEN
-
-   It sends:
-     lotto  3990 = 142,000    super6 2609 = 260,000
-     lotto  3991 = 144,000    super6 2610 = 270,000
-     lotto  3992 = 146,000    super6 2611 = 307,000
-                              super6 2612 = 354,000
-                              super6 2613 = 398,000
+That answers "is the jackpot wrong because the app never had it, or because it
+never reached the portal?" - two different problems.
 
 
-WORTH CHECKING
---------------
-The homepage's "Current Estimated Jackpot" banner may be a separate WordPress
-setting rather than a value read from the results table. If the per-draw
-jackpots correct but the big banner figure does not, ask the web admin which
-source that banner uses.
+THEN: PUSH IT
+
+  POST /api/push-website     { "game": "lotto" }
+  POST /api/push-website     { "game": "super6" }
+
+With no amount given, the app reads the most recent jackpot from its own
+database and PUTs it onto the portal's last stored draw. Winning numbers and
+letter are read back from the portal and preserved exactly.
+
+To send a specific figure instead:
+
+  POST /api/push-website     { "game": "lotto", "jackpot": 148000 }
+
+When a jackpot has been WON the figure legitimately drops. The app detects this
+from jackpot_winners and sends "jackpot_reset": true so the portal's
+progression check accepts it. Nothing extra to do.
+
+
+IF THE DIAGNOSE SHOWS THE APP HAS NO JACKPOT
+
+  "No lotto jackpot has been entered in the app yet."
+
+Then the figure was never saved in the app. Open the draw, enter the new
+jackpot in "Next estimated jackpot", press Save jackpot, then push.
+
+
+FILES
+  netlify/functions/push-website.mjs         diagnose + database-sourced jackpot
+  netlify/functions/lib/websiteWebhook.mjs   unchanged from the previous update
+
+DEPLOY
+  git add -A
+  git commit -m "Push jackpot from the app database; add diagnose"
+  git push
+
+
+HOW IT WORKS
+  1. Read the newest jackpot from lotto_results / super6_results.
+  2. Ask the portal for its last stored draw and current jackpot.
+  3. If they already agree, report "unchanged" and write nothing.
+  4. Otherwise read that draw back from the portal, merge the new jackpot,
+     and PUT the full record. PUT is the portal's correction route, so the
+     existing draw is updated rather than duplicated.

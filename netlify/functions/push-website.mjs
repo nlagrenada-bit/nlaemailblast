@@ -1,28 +1,115 @@
-// POST /api/push-website  { drawDate }
-// Pushes a day's results to the website/database without sending any email.
-// Approver/admin only. Used by the "Update the website/database only" option.
+// POST /api/push-website
+//
+//   { drawDate: '2026-09-07' }              push that day's results
+//   { game: 'lotto' }                       take the jackpot from OUR database
+//                                           and push it to the portal
+//   { game: 'lotto', jackpot: 148000 }      push an explicit figure
+//   { diagnose: true }                      compare our jackpots with the portal's
+//
+// Pushes to the results portal without sending any email. Approver/admin only.
 
 import { requireStaff } from './lib/supabaseAdmin.mjs';
 import { createClient } from '@supabase/supabase-js';
-import { pushResultsToWebsite } from './lib/websiteWebhook.mjs';
+import { pushResultsToWebsite, pushJackpot, lastStored } from './lib/websiteWebhook.mjs';
 
 const json = (b, s = 200) =>
-  new Response(JSON.stringify(b), { status: s, headers: { 'content-type': 'application/json' } });
+  new Response(JSON.stringify(b, null, 2), { status: s, headers: { 'content-type': 'application/json' } });
+
+const db = () => createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY,
+  { auth: { persistSession: false } });
+
+const TABLE = { lotto: 'lotto_results', super6: 'super6_results' };
+
+/**
+ * The jackpot the operator most recently entered for a game. This is the
+ * figure now being played for, which is exactly what the portal stores.
+ * Reads the newest row that actually has a jackpot, so a later draw entered
+ * without one doesn't mask it.
+ */
+async function jackpotFromDatabase(game, admin) {
+  const table = TABLE[game];
+  if (!table) return { ok: false, error: `No jackpot is tracked for ${game}.` };
+
+  const { data, error } = await admin.from(table)
+    .select('draw_date, draw_no, numbers, free_ticket_letter, jackpot_amount, jackpot_winners')
+    .not('jackpot_amount', 'is', null)
+    .gt('jackpot_amount', 0)
+    .order('draw_date', { ascending: false })
+    .limit(1);
+
+  if (error) return { ok: false, error: error.message };
+  const row = data?.[0];
+  if (!row) {
+    return { ok: false, error:
+      `No ${game} jackpot has been entered in the app yet. Enter it on the draw, then try again.` };
+  }
+  return {
+    ok: true,
+    amount: Number(row.jackpot_amount),
+    drawDate: row.draw_date,
+    drawNo: row.draw_no,
+    numbers: row.numbers || null,
+    letter: row.free_ticket_letter || '',
+    won: Number(row.jackpot_winners) > 0,
+  };
+}
 
 export default async (request) => {
   if (request.method !== 'POST') return json({ error: 'Use POST.' }, 405);
+
   const auth = await requireStaff(request);
   if (auth.error) return json({ error: auth.error }, auth.status);
   if (!['approver', 'admin'].includes(auth.staff.role)) {
     return json({ error: 'Only an approver or admin can update the website.' }, 403);
   }
+
   let body;
   try { body = await request.json(); } catch { return json({ error: 'Send a JSON body.' }, 400); }
+  const admin = db();
+
+  // ---- diagnose: what do we hold vs what does the portal hold? --------
+  if (body?.diagnose) {
+    const out = {};
+    for (const game of ['lotto', 'super6']) {
+      const ours = await jackpotFromDatabase(game, admin);
+      const theirs = await lastStored(game);
+      out[game] = {
+        app: ours.ok
+          ? { jackpot: ours.amount, drawDate: ours.drawDate, drawNo: ours.drawNo }
+          : { error: ours.error },
+        portal: theirs.ok
+          ? { jackpot: theirs.lastJackpot, lastDraw: theirs.lastDrawNumber, nextDraw: theirs.nextDrawNumber }
+          : { error: theirs.error },
+        match: ours.ok && theirs.ok ? ours.amount === theirs.lastJackpot : null,
+      };
+    }
+    return json({ ok: true, compare: out });
+  }
+
+  // ---- jackpot update -------------------------------------------------
+  if (body?.game) {
+    const game = body.game;
+    let amount = body.jackpot;
+    let won = !!body.jackpotWon;
+    let source = 'supplied';
+
+    // No figure given: take the one the operator entered in the app.
+    if (amount == null) {
+      const ours = await jackpotFromDatabase(game, admin);
+      if (!ours.ok) return json({ error: ours.error }, 422);
+      amount = ours.amount;
+      won = ours.won;
+      source = `app database (${game} draw ${ours.drawNo ?? '?'}, ${ours.drawDate})`;
+    }
+
+    const r = await pushJackpot(game, amount, { jackpotWon: won });
+    if (!r.ok) return json({ error: r.error, source, amount }, 502);
+    return json({ ok: true, source, jackpot: r });
+  }
+
+  // ---- whole-day push -------------------------------------------------
   const drawDate = (body?.drawDate || '').trim();
   if (!drawDate) return json({ error: 'drawDate is required.' }, 400);
-
-  const admin = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY,
-    { auth: { persistSession: false } });
 
   const [daily, cashPops, lotto, super6] = await Promise.all([
     admin.from('daily_results').select('*').eq('draw_date', drawDate).then((r) => r.data || []),
@@ -32,8 +119,29 @@ export default async (request) => {
   ]);
 
   const website = await pushResultsToWebsite({ date: drawDate, daily, cashPops, lotto, super6 });
-  if (website?.skipped) return json({ error: `The results portal is not configured (${website.reason}).` }, 400);
-  return json({ ok: true, website });
+  if (website?.skipped) {
+    return json({ error: `The results portal is not configured (${website.reason}).` }, 400);
+  }
+
+  // A jackpot entered without winning numbers can't go as a result push - the
+  // portal needs the full record - so send it as a jackpot correction instead.
+  const extras = [];
+  for (const [game, row] of [['lotto', lotto], ['super6', super6]]) {
+    const jp = Number(row?.jackpot_amount);
+    if (!row || !Number.isFinite(jp) || jp <= 0) continue;
+    if (row.numbers?.length) continue;
+    const r = await pushJackpot(game, jp, { jackpotWon: Number(row.jackpot_winners) > 0 });
+    extras.push({ game, ...r });
+  }
+
+  if (website.sent === 0 && website.failed.length === 0 && extras.length === 0) {
+    return json({
+      error: `No results are entered for ${drawDate}, so there was nothing to send. `
+           + `Enter the winning numbers first, or update the jackpot on its own.`,
+    }, 422);
+  }
+
+  return json({ ok: true, website, jackpotUpdates: extras });
 };
 
 export const config = { path: '/api/push-website' };
