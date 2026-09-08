@@ -31,22 +31,27 @@ export default function Rail({
       });
     }
   }
-  stops.sort((a, b) => toMinutes(a.time) - toMinutes(b.time));
-
   if (scheduled.lotto) {
     stops.push({
       key: 'lotto', kind: 'lotto', code: 'lotto', name: 'Lotto Draw',
-      time: '20:30', game: '5 from 34 · free ticket letter',
+      time: '19:45', game: '5 from 34 · free ticket letter',
       entered: !!results.lotto,
     });
   }
   if (scheduled.super6) {
     stops.push({
       key: 'super6', kind: 'super6', code: 'super6', name: 'Super 6 Draw',
-      time: '20:30', game: '6 from 28 · free ticket letter',
+      time: '19:45', game: '6 from 28 · free ticket letter',
       entered: !!results.super6,
     });
   }
+
+  // Sorted only once every stop exists. Lotto and Super 6 draw at the same
+  // time as the Evening daily draw, so ties fall back to a fixed order that
+  // matches how the desk reads the day.
+  const TIE = { daily: 0, pop: 1, lotto: 2, super6: 3 };
+  stops.sort((a, b) =>
+    (toMinutes(a.time) - toMinutes(b.time)) || (TIE[a.kind] - TIE[b.kind]));
 
   const now = minutesNow();
   const dueKey = isToday

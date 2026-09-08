@@ -1,0 +1,40 @@
+Lotto and Super 6 draw time: 8:30pm -> 7:45pm
+==============================================
+
+FILE CHANGED:  src/components/Rail.jsx   (one file, nothing else)
+
+Two edits:
+
+1. Both draws changed from time: '20:30' to time: '19:45'.
+
+2. Moved the stops.sort() call so it runs AFTER Lotto and Super 6 are added,
+   not before. Previously the sort ran first, which happened to look right only
+   because 20:30 was later than everything else. At 19:45 they would have been
+   stranded at the bottom of the rail, below the 8:45pm Night Pop.
+
+   A tiebreak was added so the three 7:45pm draws always appear in the same
+   order: Evening Draw, then Lotto, then Super 6.
+
+RESULTING RAIL ORDER (a Friday, all games scheduled):
+
+   08:45  Morning Pop
+   09:45  Mid-Morning
+   11:45  Midday Pop
+   12:45  Midday
+   14:45  Afternoon Pop
+   16:45  Mid-Afternoon
+   17:45  Evening Pop
+   19:45  Evening Draw
+   19:45  Lotto Draw
+   19:45  Super 6 Draw
+   20:45  Night Pop
+
+DEPLOY:
+   git add src/components/Rail.jsx
+   git commit -m "Lotto and Super 6 draw at 7:45pm"
+   git push
+
+NOT AFFECTED:
+ - The email template does not print draw times, so no change needed there.
+ - The public results site already shows Lotto/Super 6 at 7:45pm.
+ - The nightly end-of-day job runs at 10:30pm, well after these draws.
