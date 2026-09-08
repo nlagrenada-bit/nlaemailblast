@@ -1,0 +1,1056 @@
+[
+ {
+  "game": "lotto",
+  "draw_number": 3990,
+  "draw_date": "2026-09-02 19:45:00",
+  "winning_numbers": [
+   1,
+   2,
+   14,
+   21,
+   26
+  ],
+  "winning_letter": "N",
+  "jackpot": 142000.0
+ },
+ {
+  "game": "lotto",
+  "draw_number": 3991,
+  "draw_date": "2026-09-04 19:45:00",
+  "winning_numbers": [
+   7,
+   10,
+   16,
+   23,
+   26
+  ],
+  "winning_letter": "G",
+  "jackpot": 144000.0
+ },
+ {
+  "game": "lotto",
+  "draw_number": 3992,
+  "draw_date": "2026-09-07 19:45:00",
+  "winning_numbers": [
+   9,
+   11,
+   13,
+   23,
+   32
+  ],
+  "winning_letter": "I",
+  "jackpot": 146000.0
+ },
+ {
+  "game": "super6",
+  "draw_number": 2609,
+  "draw_date": "2026-08-21 19:45:00",
+  "winning_numbers": [
+   2,
+   5,
+   11,
+   16,
+   23,
+   28
+  ],
+  "winning_letter": "F",
+  "jackpot": 260000.0
+ },
+ {
+  "game": "super6",
+  "draw_number": 2610,
+  "draw_date": "2026-08-25 19:45:00",
+  "winning_numbers": [
+   4,
+   5,
+   22,
+   25,
+   26,
+   28
+  ],
+  "winning_letter": "D",
+  "jackpot": 270000.0
+ },
+ {
+  "game": "super6",
+  "draw_number": 2611,
+  "draw_date": "2026-08-28 19:45:00",
+  "winning_numbers": [
+   4,
+   8,
+   11,
+   15,
+   20,
+   25
+  ],
+  "winning_letter": "E",
+  "jackpot": 307000.0
+ },
+ {
+  "game": "super6",
+  "draw_number": 2612,
+  "draw_date": "2026-09-01 19:45:00",
+  "winning_numbers": [
+   2,
+   10,
+   12,
+   20,
+   26,
+   27
+  ],
+  "winning_letter": "I",
+  "jackpot": 354000.0
+ },
+ {
+  "game": "super6",
+  "draw_number": 2613,
+  "draw_date": "2026-09-04 19:45:00",
+  "winning_numbers": [
+   8,
+   11,
+   17,
+   18,
+   19,
+   27
+  ],
+  "winning_letter": "I",
+  "jackpot": 398000.0
+ },
+ {
+  "game": "playway",
+  "draw_number": 10621,
+  "draw_date": "2026-09-01 09:45:00",
+  "winning_numbers": 22,
+  "multiplier": "FP"
+ },
+ {
+  "game": "playway",
+  "draw_number": 10622,
+  "draw_date": "2026-09-01 12:45:00",
+  "winning_numbers": 13,
+  "multiplier": "FP"
+ },
+ {
+  "game": "playway",
+  "draw_number": 10623,
+  "draw_date": "2026-09-01 16:45:00",
+  "winning_numbers": 4,
+  "multiplier": "FP"
+ },
+ {
+  "game": "playway",
+  "draw_number": 10624,
+  "draw_date": "2026-09-01 19:45:00",
+  "winning_numbers": 7,
+  "multiplier": "FP"
+ },
+ {
+  "game": "playway",
+  "draw_number": 10625,
+  "draw_date": "2026-09-02 09:45:00",
+  "winning_numbers": 35,
+  "multiplier": "FP"
+ },
+ {
+  "game": "playway",
+  "draw_number": 10626,
+  "draw_date": "2026-09-02 12:45:00",
+  "winning_numbers": 27,
+  "multiplier": "FP"
+ },
+ {
+  "game": "playway",
+  "draw_number": 10627,
+  "draw_date": "2026-09-02 16:45:00",
+  "winning_numbers": 10,
+  "multiplier": "FP"
+ },
+ {
+  "game": "playway",
+  "draw_number": 10628,
+  "draw_date": "2026-09-02 19:45:00",
+  "winning_numbers": 10,
+  "multiplier": "FP"
+ },
+ {
+  "game": "playway",
+  "draw_number": 10629,
+  "draw_date": "2026-09-03 09:45:00",
+  "winning_numbers": 21,
+  "multiplier": "FP"
+ },
+ {
+  "game": "playway",
+  "draw_number": 10630,
+  "draw_date": "2026-09-03 12:45:00",
+  "winning_numbers": 2,
+  "multiplier": "FP"
+ },
+ {
+  "game": "playway",
+  "draw_number": 10631,
+  "draw_date": "2026-09-03 16:45:00",
+  "winning_numbers": 30,
+  "multiplier": "FP"
+ },
+ {
+  "game": "playway",
+  "draw_number": 10632,
+  "draw_date": "2026-09-03 19:45:00",
+  "winning_numbers": 11,
+  "multiplier": "7X"
+ },
+ {
+  "game": "playway",
+  "draw_number": 10633,
+  "draw_date": "2026-09-04 09:45:00",
+  "winning_numbers": 4,
+  "multiplier": "FP"
+ },
+ {
+  "game": "playway",
+  "draw_number": 10634,
+  "draw_date": "2026-09-04 12:45:00",
+  "winning_numbers": 27,
+  "multiplier": "3X"
+ },
+ {
+  "game": "playway",
+  "draw_number": 10635,
+  "draw_date": "2026-09-04 16:45:00",
+  "winning_numbers": 12,
+  "multiplier": "FP"
+ },
+ {
+  "game": "playway",
+  "draw_number": 10636,
+  "draw_date": "2026-09-04 19:45:00",
+  "winning_numbers": 21,
+  "multiplier": "FP"
+ },
+ {
+  "game": "playway",
+  "draw_number": 10637,
+  "draw_date": "2026-09-05 09:45:00",
+  "winning_numbers": 14,
+  "multiplier": "FP"
+ },
+ {
+  "game": "playway",
+  "draw_number": 10638,
+  "draw_date": "2026-09-05 12:45:00",
+  "winning_numbers": 20,
+  "multiplier": "FP"
+ },
+ {
+  "game": "playway",
+  "draw_number": 10639,
+  "draw_date": "2026-09-05 16:45:00",
+  "winning_numbers": 29,
+  "multiplier": "FP"
+ },
+ {
+  "game": "playway",
+  "draw_number": 10640,
+  "draw_date": "2026-09-05 19:45:00",
+  "winning_numbers": 11,
+  "multiplier": "FP"
+ },
+ {
+  "game": "playway",
+  "draw_number": 10641,
+  "draw_date": "2026-09-07 09:45:00",
+  "winning_numbers": 31,
+  "multiplier": "5X"
+ },
+ {
+  "game": "playway",
+  "draw_number": 10642,
+  "draw_date": "2026-09-07 12:45:00",
+  "winning_numbers": 14,
+  "multiplier": "FP"
+ },
+ {
+  "game": "playway",
+  "draw_number": 10643,
+  "draw_date": "2026-09-07 16:45:00",
+  "winning_numbers": 36,
+  "multiplier": "FP"
+ },
+ {
+  "game": "playway",
+  "draw_number": 10644,
+  "draw_date": "2026-09-07 19:45:00",
+  "winning_numbers": 35,
+  "multiplier": "3X"
+ },
+ {
+  "game": "dailypick3",
+  "draw_number": 13049,
+  "draw_date": "2026-09-01 09:45:00",
+  "winning_numbers": [
+   0,
+   1,
+   7
+  ],
+  "multiplier": "FP"
+ },
+ {
+  "game": "dailypick3",
+  "draw_number": 13050,
+  "draw_date": "2026-09-01 12:45:00",
+  "winning_numbers": [
+   0,
+   2,
+   0
+  ],
+  "multiplier": "FP"
+ },
+ {
+  "game": "dailypick3",
+  "draw_number": 13051,
+  "draw_date": "2026-09-01 16:45:00",
+  "winning_numbers": [
+   3,
+   0,
+   9
+  ],
+  "multiplier": "FP"
+ },
+ {
+  "game": "dailypick3",
+  "draw_number": 13052,
+  "draw_date": "2026-09-01 19:45:00",
+  "winning_numbers": [
+   0,
+   4,
+   6
+  ],
+  "multiplier": "FP"
+ },
+ {
+  "game": "dailypick3",
+  "draw_number": 13053,
+  "draw_date": "2026-09-02 09:45:00",
+  "winning_numbers": [
+   4,
+   0,
+   2
+  ],
+  "multiplier": "FP"
+ },
+ {
+  "game": "dailypick3",
+  "draw_number": 13054,
+  "draw_date": "2026-09-02 12:45:00",
+  "winning_numbers": [
+   8,
+   6,
+   7
+  ],
+  "multiplier": "FP"
+ },
+ {
+  "game": "dailypick3",
+  "draw_number": 13055,
+  "draw_date": "2026-09-02 16:45:00",
+  "winning_numbers": [
+   9,
+   4,
+   2
+  ],
+  "multiplier": "FP"
+ },
+ {
+  "game": "dailypick3",
+  "draw_number": 13056,
+  "draw_date": "2026-09-02 19:45:00",
+  "winning_numbers": [
+   0,
+   9,
+   1
+  ],
+  "multiplier": "3X"
+ },
+ {
+  "game": "dailypick3",
+  "draw_number": 13057,
+  "draw_date": "2026-09-03 09:45:00",
+  "winning_numbers": [
+   3,
+   4,
+   3
+  ],
+  "multiplier": "FP"
+ },
+ {
+  "game": "dailypick3",
+  "draw_number": 13058,
+  "draw_date": "2026-09-03 12:45:00",
+  "winning_numbers": [
+   4,
+   6,
+   1
+  ],
+  "multiplier": "FP"
+ },
+ {
+  "game": "dailypick3",
+  "draw_number": 13059,
+  "draw_date": "2026-09-03 16:45:00",
+  "winning_numbers": [
+   8,
+   1,
+   1
+  ],
+  "multiplier": "FP"
+ },
+ {
+  "game": "dailypick3",
+  "draw_number": 13060,
+  "draw_date": "2026-09-03 19:45:00",
+  "winning_numbers": [
+   3,
+   3,
+   0
+  ],
+  "multiplier": "FP"
+ },
+ {
+  "game": "dailypick3",
+  "draw_number": 13061,
+  "draw_date": "2026-09-04 09:45:00",
+  "winning_numbers": [
+   1,
+   5,
+   2
+  ],
+  "multiplier": "FP"
+ },
+ {
+  "game": "dailypick3",
+  "draw_number": 13062,
+  "draw_date": "2026-09-04 12:45:00",
+  "winning_numbers": [
+   8,
+   0,
+   6
+  ],
+  "multiplier": "FP"
+ },
+ {
+  "game": "dailypick3",
+  "draw_number": 13063,
+  "draw_date": "2026-09-04 16:45:00",
+  "winning_numbers": [
+   8,
+   6,
+   4
+  ],
+  "multiplier": "FP"
+ },
+ {
+  "game": "dailypick3",
+  "draw_number": 13064,
+  "draw_date": "2026-09-04 19:45:00",
+  "winning_numbers": [
+   4,
+   3,
+   1
+  ],
+  "multiplier": "FP"
+ },
+ {
+  "game": "dailypick3",
+  "draw_number": 13065,
+  "draw_date": "2026-09-05 09:45:00",
+  "winning_numbers": [
+   9,
+   3,
+   4
+  ],
+  "multiplier": "3X"
+ },
+ {
+  "game": "dailypick3",
+  "draw_number": 13066,
+  "draw_date": "2026-09-05 12:45:00",
+  "winning_numbers": [
+   3,
+   9,
+   7
+  ],
+  "multiplier": "FP"
+ },
+ {
+  "game": "dailypick3",
+  "draw_number": 13067,
+  "draw_date": "2026-09-05 16:45:00",
+  "winning_numbers": [
+   4,
+   6,
+   7
+  ],
+  "multiplier": "FP"
+ },
+ {
+  "game": "dailypick3",
+  "draw_number": 13068,
+  "draw_date": "2026-09-05 19:45:00",
+  "winning_numbers": [
+   3,
+   8,
+   4
+  ],
+  "multiplier": "3X"
+ },
+ {
+  "game": "dailypick3",
+  "draw_number": 13069,
+  "draw_date": "2026-09-07 09:45:00",
+  "winning_numbers": [
+   2,
+   7,
+   6
+  ],
+  "multiplier": "FP"
+ },
+ {
+  "game": "dailypick3",
+  "draw_number": 13070,
+  "draw_date": "2026-09-07 12:45:00",
+  "winning_numbers": [
+   9,
+   9,
+   7
+  ],
+  "multiplier": "FP"
+ },
+ {
+  "game": "dailypick3",
+  "draw_number": 13071,
+  "draw_date": "2026-09-07 16:45:00",
+  "winning_numbers": [
+   9,
+   9,
+   8
+  ],
+  "multiplier": "FP"
+ },
+ {
+  "game": "dailypick3",
+  "draw_number": 13072,
+  "draw_date": "2026-09-07 19:45:00",
+  "winning_numbers": [
+   1,
+   1,
+   2
+  ],
+  "multiplier": "FP"
+ },
+ {
+  "game": "cash4",
+  "draw_number": 7818,
+  "draw_date": "2026-09-01 09:45:00",
+  "winning_numbers": [
+   2,
+   5,
+   3,
+   3
+  ],
+  "multiplier": "FP"
+ },
+ {
+  "game": "cash4",
+  "draw_number": 7819,
+  "draw_date": "2026-09-01 12:45:00",
+  "winning_numbers": [
+   6,
+   2,
+   9,
+   9
+  ],
+  "multiplier": "FP"
+ },
+ {
+  "game": "cash4",
+  "draw_number": 7820,
+  "draw_date": "2026-09-01 16:45:00",
+  "winning_numbers": [
+   2,
+   1,
+   1,
+   8
+  ],
+  "multiplier": "5X"
+ },
+ {
+  "game": "cash4",
+  "draw_number": 7821,
+  "draw_date": "2026-09-01 19:45:00",
+  "winning_numbers": [
+   2,
+   9,
+   7,
+   1
+  ],
+  "multiplier": "3X"
+ },
+ {
+  "game": "cash4",
+  "draw_number": 7822,
+  "draw_date": "2026-09-02 09:45:00",
+  "winning_numbers": [
+   2,
+   6,
+   3,
+   9
+  ],
+  "multiplier": "5X"
+ },
+ {
+  "game": "cash4",
+  "draw_number": 7823,
+  "draw_date": "2026-09-02 12:45:00",
+  "winning_numbers": [
+   4,
+   1,
+   1,
+   1
+  ],
+  "multiplier": "FP"
+ },
+ {
+  "game": "cash4",
+  "draw_number": 7824,
+  "draw_date": "2026-09-02 16:45:00",
+  "winning_numbers": [
+   0,
+   0,
+   9,
+   2
+  ],
+  "multiplier": "FP"
+ },
+ {
+  "game": "cash4",
+  "draw_number": 7825,
+  "draw_date": "2026-09-02 19:45:00",
+  "winning_numbers": [
+   7,
+   1,
+   0,
+   8
+  ],
+  "multiplier": "FP"
+ },
+ {
+  "game": "cash4",
+  "draw_number": 7826,
+  "draw_date": "2026-09-03 09:45:00",
+  "winning_numbers": [
+   4,
+   3,
+   2,
+   9
+  ],
+  "multiplier": "FP"
+ },
+ {
+  "game": "cash4",
+  "draw_number": 7827,
+  "draw_date": "2026-09-03 12:45:00",
+  "winning_numbers": [
+   5,
+   7,
+   9,
+   8
+  ],
+  "multiplier": "FP"
+ },
+ {
+  "game": "cash4",
+  "draw_number": 7828,
+  "draw_date": "2026-09-03 16:45:00",
+  "winning_numbers": [
+   8,
+   1,
+   2,
+   0
+  ],
+  "multiplier": "FP"
+ },
+ {
+  "game": "cash4",
+  "draw_number": 7829,
+  "draw_date": "2026-09-03 19:45:00",
+  "winning_numbers": [
+   9,
+   4,
+   0,
+   6
+  ],
+  "multiplier": "FP"
+ },
+ {
+  "game": "cash4",
+  "draw_number": 7830,
+  "draw_date": "2026-09-04 09:45:00",
+  "winning_numbers": [
+   9,
+   5,
+   1,
+   6
+  ],
+  "multiplier": "FP"
+ },
+ {
+  "game": "cash4",
+  "draw_number": 7831,
+  "draw_date": "2026-09-04 12:45:00",
+  "winning_numbers": [
+   8,
+   5,
+   1,
+   8
+  ],
+  "multiplier": "FP"
+ },
+ {
+  "game": "cash4",
+  "draw_number": 7832,
+  "draw_date": "2026-09-04 16:45:00",
+  "winning_numbers": [
+   7,
+   0,
+   1,
+   9
+  ],
+  "multiplier": "FP"
+ },
+ {
+  "game": "cash4",
+  "draw_number": 7833,
+  "draw_date": "2026-09-04 19:45:00",
+  "winning_numbers": [
+   1,
+   9,
+   3,
+   8
+  ],
+  "multiplier": "3X"
+ },
+ {
+  "game": "cash4",
+  "draw_number": 7834,
+  "draw_date": "2026-09-05 09:45:00",
+  "winning_numbers": [
+   2,
+   6,
+   7,
+   3
+  ],
+  "multiplier": "7X"
+ },
+ {
+  "game": "cash4",
+  "draw_number": 7835,
+  "draw_date": "2026-09-05 12:45:00",
+  "winning_numbers": [
+   4,
+   6,
+   4,
+   1
+  ],
+  "multiplier": "3X"
+ },
+ {
+  "game": "cash4",
+  "draw_number": 7836,
+  "draw_date": "2026-09-05 16:45:00",
+  "winning_numbers": [
+   4,
+   7,
+   9,
+   4
+  ],
+  "multiplier": "FP"
+ },
+ {
+  "game": "cash4",
+  "draw_number": 7837,
+  "draw_date": "2026-09-05 19:45:00",
+  "winning_numbers": [
+   1,
+   6,
+   5,
+   4
+  ],
+  "multiplier": "FP"
+ },
+ {
+  "game": "cash4",
+  "draw_number": 7838,
+  "draw_date": "2026-09-07 09:45:00",
+  "winning_numbers": [
+   4,
+   4,
+   7,
+   9
+  ],
+  "multiplier": "FP"
+ },
+ {
+  "game": "cash4",
+  "draw_number": 7839,
+  "draw_date": "2026-09-07 12:45:00",
+  "winning_numbers": [
+   0,
+   9,
+   5,
+   3
+  ],
+  "multiplier": "FP"
+ },
+ {
+  "game": "cash4",
+  "draw_number": 7840,
+  "draw_date": "2026-09-07 16:45:00",
+  "winning_numbers": [
+   2,
+   3,
+   9,
+   4
+  ],
+  "multiplier": "FP"
+ },
+ {
+  "game": "cash4",
+  "draw_number": 7841,
+  "draw_date": "2026-09-07 19:45:00",
+  "winning_numbers": [
+   2,
+   2,
+   8,
+   5
+  ],
+  "multiplier": "FP"
+ },
+ {
+  "game": "cashpop",
+  "draw_number": 776,
+  "draw_date": "2026-09-01 08:45:00",
+  "draw_period": "Morning",
+  "winning_number": 3
+ },
+ {
+  "game": "cashpop",
+  "draw_number": 777,
+  "draw_date": "2026-09-01 11:45:00",
+  "draw_period": "Midday",
+  "winning_number": 8
+ },
+ {
+  "game": "cashpop",
+  "draw_number": 778,
+  "draw_date": "2026-09-01 14:45:00",
+  "draw_period": "Afternoon",
+  "winning_number": 6
+ },
+ {
+  "game": "cashpop",
+  "draw_number": 779,
+  "draw_date": "2026-09-01 17:45:00",
+  "draw_period": "Evening",
+  "winning_number": 14
+ },
+ {
+  "game": "cashpop",
+  "draw_number": 780,
+  "draw_date": "2026-09-01 20:45:00",
+  "draw_period": "Night",
+  "winning_number": 12
+ },
+ {
+  "game": "cashpop",
+  "draw_number": 781,
+  "draw_date": "2026-09-02 08:45:00",
+  "draw_period": "Morning",
+  "winning_number": 9
+ },
+ {
+  "game": "cashpop",
+  "draw_number": 782,
+  "draw_date": "2026-09-02 11:45:00",
+  "draw_period": "Midday",
+  "winning_number": 7
+ },
+ {
+  "game": "cashpop",
+  "draw_number": 783,
+  "draw_date": "2026-09-02 14:45:00",
+  "draw_period": "Afternoon",
+  "winning_number": 6
+ },
+ {
+  "game": "cashpop",
+  "draw_number": 784,
+  "draw_date": "2026-09-02 17:45:00",
+  "draw_period": "Evening",
+  "winning_number": 5
+ },
+ {
+  "game": "cashpop",
+  "draw_number": 785,
+  "draw_date": "2026-09-02 20:45:00",
+  "draw_period": "Night",
+  "winning_number": 4
+ },
+ {
+  "game": "cashpop",
+  "draw_number": 786,
+  "draw_date": "2026-09-03 08:45:00",
+  "draw_period": "Morning",
+  "winning_number": 4
+ },
+ {
+  "game": "cashpop",
+  "draw_number": 787,
+  "draw_date": "2026-09-03 11:45:00",
+  "draw_period": "Midday",
+  "winning_number": 10
+ },
+ {
+  "game": "cashpop",
+  "draw_number": 788,
+  "draw_date": "2026-09-03 14:45:00",
+  "draw_period": "Afternoon",
+  "winning_number": 8
+ },
+ {
+  "game": "cashpop",
+  "draw_number": 789,
+  "draw_date": "2026-09-03 17:45:00",
+  "draw_period": "Evening",
+  "winning_number": 6
+ },
+ {
+  "game": "cashpop",
+  "draw_number": 790,
+  "draw_date": "2026-09-03 20:45:00",
+  "draw_period": "Night",
+  "winning_number": 6
+ },
+ {
+  "game": "cashpop",
+  "draw_number": 791,
+  "draw_date": "2026-09-04 08:45:00",
+  "draw_period": "Morning",
+  "winning_number": 5
+ },
+ {
+  "game": "cashpop",
+  "draw_number": 792,
+  "draw_date": "2026-09-04 11:45:00",
+  "draw_period": "Midday",
+  "winning_number": 14
+ },
+ {
+  "game": "cashpop",
+  "draw_number": 793,
+  "draw_date": "2026-09-04 14:45:00",
+  "draw_period": "Afternoon",
+  "winning_number": 7
+ },
+ {
+  "game": "cashpop",
+  "draw_number": 794,
+  "draw_date": "2026-09-04 17:45:00",
+  "draw_period": "Evening",
+  "winning_number": 12
+ },
+ {
+  "game": "cashpop",
+  "draw_number": 795,
+  "draw_date": "2026-09-04 20:45:00",
+  "draw_period": "Night",
+  "winning_number": 2
+ },
+ {
+  "game": "cashpop",
+  "draw_number": 796,
+  "draw_date": "2026-09-05 08:45:00",
+  "draw_period": "Morning",
+  "winning_number": 3
+ },
+ {
+  "game": "cashpop",
+  "draw_number": 797,
+  "draw_date": "2026-09-05 11:45:00",
+  "draw_period": "Midday",
+  "winning_number": 1
+ },
+ {
+  "game": "cashpop",
+  "draw_number": 798,
+  "draw_date": "2026-09-05 14:45:00",
+  "draw_period": "Afternoon",
+  "winning_number": 14
+ },
+ {
+  "game": "cashpop",
+  "draw_number": 799,
+  "draw_date": "2026-09-05 17:45:00",
+  "draw_period": "Evening",
+  "winning_number": 15
+ },
+ {
+  "game": "cashpop",
+  "draw_number": 800,
+  "draw_date": "2026-09-05 20:45:00",
+  "draw_period": "Night",
+  "winning_number": 11
+ },
+ {
+  "game": "cashpop",
+  "draw_number": 801,
+  "draw_date": "2026-09-07 08:45:00",
+  "draw_period": "Morning",
+  "winning_number": 13
+ },
+ {
+  "game": "cashpop",
+  "draw_number": 802,
+  "draw_date": "2026-09-07 11:45:00",
+  "draw_period": "Midday",
+  "winning_number": 9
+ },
+ {
+  "game": "cashpop",
+  "draw_number": 803,
+  "draw_date": "2026-09-07 14:45:00",
+  "draw_period": "Afternoon",
+  "winning_number": 6
+ },
+ {
+  "game": "cashpop",
+  "draw_number": 804,
+  "draw_date": "2026-09-07 17:45:00",
+  "draw_period": "Evening",
+  "winning_number": 5
+ },
+ {
+  "game": "cashpop",
+  "draw_number": 805,
+  "draw_date": "2026-09-07 20:45:00",
+  "draw_period": "Night",
+  "winning_number": 1
+ },
+ {
+  "game": "cashpop",
+  "draw_number": 806,
+  "draw_date": "2026-09-08 08:45:00",
+  "draw_period": "Morning",
+  "winning_number": 8
+ }
+]
