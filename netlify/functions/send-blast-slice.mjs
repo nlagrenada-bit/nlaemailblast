@@ -12,7 +12,7 @@
 
 import nodemailer from 'nodemailer';
 import { createClient } from '@supabase/supabase-js';
-import { pushResultsToWebsite } from './lib/websiteWebhook.mjs';
+import { pushResultsEverywhere } from './lib/pushAll.mjs';
 
 const SLICE_EXTERNAL = Number(process.env.SLICE_EXTERNAL || 6);
 const SLICE_GAP_MS   = Number(process.env.SLICE_GAP_MS || 3000);
@@ -150,14 +150,14 @@ export default async (request) => {
         admin.from('lotto_results').select('*').eq('draw_date', date).maybeSingle().then((r) => r.data),
         admin.from('super6_results').select('*').eq('draw_date', date).maybeSingle().then((r) => r.data),
       ]);
-      website = await pushResultsToWebsite({ date, daily, cashPops, lotto, super6 });
+      website = await pushResultsEverywhere({ date, daily, cashPops, lotto, super6 });
     } catch (e) { website = { error: e.message }; }
 
     const c = await counts();
     await setRun({
       status: 'complete', sent_count: c.sent, failed_count: c.failed,
-      error_message: website?.failed?.length
-        ? `${website.failed.length} website update(s) failed.` : null,
+      error_message: website?.failed
+        ? `${website.failed} website update(s) failed.` : null,
       finished_at: new Date().toISOString(),
     });
     return json({ done: true, sent: c.sent, failed: c.failed });

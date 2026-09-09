@@ -10,7 +10,8 @@
 
 import { requireStaff } from './lib/supabaseAdmin.mjs';
 import { createClient } from '@supabase/supabase-js';
-import { pushResultsToWebsite, pushJackpot, lastStored } from './lib/websiteWebhook.mjs';
+import { pushJackpot, lastStored } from './lib/websiteWebhook.mjs';
+import { pushResultsEverywhere } from './lib/pushAll.mjs';
 
 const json = (b, s = 200) =>
   new Response(JSON.stringify(b, null, 2), { status: s, headers: { 'content-type': 'application/json' } });
@@ -118,9 +119,11 @@ export default async (request) => {
     admin.from('super6_results').select('*').eq('draw_date', drawDate).maybeSingle().then((r) => r.data),
   ]);
 
-  const website = await pushResultsToWebsite({ date: drawDate, daily, cashPops, lotto, super6 });
-  if (website?.skipped) {
-    return json({ error: `The results portal is not configured (${website.reason}).` }, 400);
+  const website = await pushResultsEverywhere({ date: drawDate, daily, cashPops, lotto, super6 });
+
+  // Every target unconfigured means there is nowhere to send at all.
+  if (website.skipped.length === 2) {
+    return json({ error: `No results target is configured (${website.skipped.join('; ')}).` }, 400);
   }
 
   // A jackpot entered without winning numbers can't go as a result push - the
@@ -134,7 +137,7 @@ export default async (request) => {
     extras.push({ game, ...r });
   }
 
-  if (website.sent === 0 && website.failed.length === 0 && extras.length === 0) {
+  if (website.sent === 0 && website.failed === 0 && extras.length === 0) {
     return json({
       error: `No results are entered for ${drawDate}, so there was nothing to send. `
            + `Enter the winning numbers first, or update the jackpot on its own.`,

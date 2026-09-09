@@ -21,6 +21,8 @@ export default async () => {
     MAIL_REPLY_TO: isSet('MAIL_REPLY_TO'),
     WEBSITE_API_BASE: isSet('WEBSITE_API_BASE'),
     WEBSITE_API_TOKEN: isSet('WEBSITE_API_TOKEN'),
+    HEXIVE_WEBHOOK_BASE: isSet('HEXIVE_WEBHOOK_BASE'),
+    HEXIVE_WEBHOOK_SECRET: isSet('HEXIVE_WEBHOOK_SECRET'),
   };
   const missing = Object.entries(env).filter(([, v]) => !v).map(([k]) => k);
 
