@@ -53,6 +53,10 @@ const pad2 = (n) => String(Number(n)).padStart(2, '0');
 const s    = (n) => String(Number(n));
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+// Lotto and Super 6 publish smallest to largest. Pick 3 and Cash 4 must NOT be
+// sorted — for those games the position of each digit is the result.
+const ascending = (nums) => [...nums].map(Number).sort((a, b) => a - b);
+
 /**
  * Build one webhook payload per game result for a day.
  * Returns [{ game, drawId, body }].
@@ -61,7 +65,7 @@ export function buildHexivePayloads({ date, daily = [], cashPops = [], lotto = n
   const out = [];
 
   if (lotto?.numbers?.length >= 5 && lotto.draw_no) {
-    const n = lotto.numbers;
+    const n = ascending(lotto.numbers);
     out.push({ game: 'lotto', drawId: lotto.draw_no, body: {
       draw_id: Number(lotto.draw_no),
       first_number:  pad2(n[0]),
@@ -74,7 +78,7 @@ export function buildHexivePayloads({ date, daily = [], cashPops = [], lotto = n
   }
 
   if (super6?.numbers?.length >= 6 && super6.draw_no) {
-    const n = super6.numbers;
+    const n = ascending(super6.numbers);
     out.push({ game: 'super6', drawId: super6.draw_no, body: {
       draw_id: Number(super6.draw_no),
       first_number:  pad2(n[0]),
@@ -190,4 +194,65 @@ export async function pushResultsToHexive(doc) {
   }
   const failed = results.filter((r) => !r.ok);
   return { sent: results.length - failed.length, failed, results };
+}
+
+// ---------------------------------------------------------------------------
+// Jackpot updates
+//
+// Separate endpoints from the result webhooks, and note the two paths are
+// named inconsistently in the spec — "super6-game" but "lottogame". They are
+// listed explicitly rather than derived, so a wrong guess can't fail silently.
+//
+//   POST /wp-json/super6-game/v1/update-jackpot   { "estimated_jackpot": 5000000 }
+//   POST /wp-json/lottogame/v1/update-jackpot     { "estimated_jackpot": 250000 }
+// ---------------------------------------------------------------------------
+
+const JACKPOT_PATH = {
+  super6: 'super6-game/v1/update-jackpot',
+  lotto:  'lottogame/v1/update-jackpot',
+};
+
+/**
+ * Set the estimated jackpot shown on the WordPress site.
+ * @param game    'lotto' | 'super6'
+ * @param amount  the new estimated jackpot
+ */
+export async function pushHexiveJackpot(game, amount) {
+  if (!BASE())   return { skipped: true, reason: 'HEXIVE_WEBHOOK_BASE not set' };
+  if (!SECRET()) return { skipped: true, reason: 'HEXIVE_WEBHOOK_SECRET not set' };
+
+  const path = JACKPOT_PATH[game];
+  if (!path) return { ok: false, game, error: `No jackpot endpoint for "${game}".` };
+
+  const jp = Number(amount);
+  if (!Number.isFinite(jp) || jp <= 0) {
+    return { ok: false, game, error: 'A positive jackpot amount is required.' };
+  }
+
+  const url = `${BASE()}/wp-json/${path}`;
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Webhook-Secret': SECRET(),
+          Accept: 'application/json',
+        },
+        body: JSON.stringify({ estimated_jackpot: jp }),
+      });
+      if (res.ok) return { ok: true, game, jackpot: jp };
+      if ((res.status >= 500 || res.status === 429) && attempt < 3) {
+        await sleep(1500 * attempt);
+        continue;
+      }
+      const text = await res.text().catch(() => '');
+      return { ok: false, game, status: res.status,
+               error: `${res.status} ${String(text).replace(/\s+/g, ' ').slice(0, 180)}` };
+    } catch (e) {
+      if (attempt === 3) return { ok: false, game, error: e.message };
+      await sleep(1000 * attempt);
+    }
+  }
+  return { ok: false, game, error: 'unreachable after retries' };
 }

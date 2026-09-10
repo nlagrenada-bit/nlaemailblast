@@ -56,6 +56,12 @@ const JACKPOT_TIME = '19:45:00';      // lotto and super 6 both draw at 7:45pm
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+// Lotto and Super 6 are published smallest to largest, which is the convention
+// on every lottery results page. Draw order is not meaningful for these games —
+// unlike Pick 3 and Cash 4, where position IS the result and must never be
+// reordered.
+const ascending = (nums) => [...nums].map(Number).sort((a, b) => a - b);
+
 /**
  * Build one API payload per game result for a day.
  * Each entry is { game, drawNumber, body } ready to send.
@@ -118,7 +124,7 @@ export function buildApiPayloads({ date, daily = [], cashPops = [], lotto = null
     const body = {
       draw_number: row.draw_no,
       draw_date: `${date} ${JACKPOT_TIME}`,
-      winning_numbers: row.numbers.map(Number),
+      winning_numbers: ascending(row.numbers),
       winning_letter: row.free_ticket_letter || '',
     };
 
@@ -357,7 +363,7 @@ export async function pushJackpot(game, amount, opts = {}) {
   }
 
   const body = {
-    winning_numbers: numbers,
+    winning_numbers: ascending(numbers),
     winning_letter: letter || '',
     jackpot: jp,
   };

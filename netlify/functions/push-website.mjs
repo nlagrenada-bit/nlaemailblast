@@ -12,6 +12,7 @@ import { requireStaff } from './lib/supabaseAdmin.mjs';
 import { createClient } from '@supabase/supabase-js';
 import { pushJackpot, lastStored } from './lib/websiteWebhook.mjs';
 import { pushResultsEverywhere } from './lib/pushAll.mjs';
+import { pushHexiveJackpot } from './lib/hexiveWebhook.mjs';
 
 const json = (b, s = 200) =>
   new Response(JSON.stringify(b, null, 2), { status: s, headers: { 'content-type': 'application/json' } });
@@ -103,9 +104,26 @@ export default async (request) => {
       source = `app database (${game} draw ${ours.drawNo ?? '?'}, ${ours.drawDate})`;
     }
 
-    const r = await pushJackpot(game, amount, { jackpotWon: won });
-    if (!r.ok) return json({ error: r.error, source, amount }, 502);
-    return json({ ok: true, source, jackpot: r });
+    // Both sites carry the jackpot, on different endpoints. Send to each
+    // independently so one failing never blocks the other.
+    const [ompR, wpR] = await Promise.all([
+      pushJackpot(game, amount, { jackpotWon: won }),
+      pushHexiveJackpot(game, amount),
+    ]);
+
+    const failures = [];
+    if (!ompR.ok && !ompR.unchanged) failures.push(`OMP: ${ompR.error}`);
+    if (!wpR.ok && !wpR.skipped)     failures.push(`WordPress: ${wpR.error}`);
+
+    if (failures.length === 2) {
+      return json({ error: failures.join(' | '), source, amount }, 502);
+    }
+    return json({
+      ok: true, source, amount,
+      omp: ompR,
+      wordpress: wpR,
+      warning: failures.length ? failures.join(' | ') : undefined,
+    });
   }
 
   // ---- whole-day push -------------------------------------------------
@@ -126,15 +144,28 @@ export default async (request) => {
     return json({ error: `No results target is configured (${website.skipped.join('; ')}).` }, 400);
   }
 
-  // A jackpot entered without winning numbers can't go as a result push - the
-  // portal needs the full record - so send it as a jackpot correction instead.
+  // Jackpots always go out separately, whether or not the draw has numbers.
+  //
+  // WordPress needs this unconditionally: its result webhook has NO jackpot
+  // field, so the ONLY way a jackpot reaches that site is these dedicated
+  // endpoints. Skipping them when numbers were present is why the Lotto
+  // jackpot never updated.
+  //
+  // The OMP is different - its result payload already carries the jackpot - so
+  // it only needs a separate call when there are no numbers to carry it.
   const extras = [];
   for (const [game, row] of [['lotto', lotto], ['super6', super6]]) {
     const jp = Number(row?.jackpot_amount);
     if (!row || !Number.isFinite(jp) || jp <= 0) continue;
-    if (row.numbers?.length) continue;
-    const r = await pushJackpot(game, jp, { jackpotWon: Number(row.jackpot_winners) > 0 });
-    extras.push({ game, ...r });
+    const won = Number(row.jackpot_winners) > 0;
+    const hasNumbers = !!row.numbers?.length;
+
+    const [o, w] = await Promise.all([
+      hasNumbers ? Promise.resolve({ skipped: true, reason: 'sent with the result' })
+                 : pushJackpot(game, jp, { jackpotWon: won }),
+      pushHexiveJackpot(game, jp),
+    ]);
+    extras.push({ game, jackpot: jp, omp: o, wordpress: w });
   }
 
   if (website.sent === 0 && website.failed === 0 && extras.length === 0) {
