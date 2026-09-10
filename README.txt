@@ -1,72 +1,62 @@
-DAY PLAN — moving draws for holidays and disruptions
-=====================================================
+NUMBER ENTRY AUTO-ADVANCE  +  DAY PLAN PANEL
+=============================================
 
-WHAT THIS ADDS
+1. THE ENTRY GLITCH — FIXED
+---------------------------
+Two faults:
 
-Set the day status to "Disrupted" and a new panel appears in the rail:
+  a) autoAdvance() ran in the SAME tick as onChange(), so focus moved to the
+     next box before React had committed the value. That is what made the
+     second digit misbehave. It now runs after the commit.
 
-    WHICH GAMES RUN TODAY
-      Daily games   Play Way, Pick 3, Cash 4    [Normal] On  Off
-      Cash Pop      five draws                  [Normal] On  Off
-      Lotto         normally Mon, Wed, Fri      [Normal] On  Off
-      Super 6       normally Tue, Fri           [Normal] On  Off
+  b) Lotto and Super 6 had NO auto-advance wired at all — every number had to
+     be clicked into.
 
-Each game is three-state:
+Now, typing moves through the boxes and STOPS at the last one:
 
-    Normal   follow the usual weekly schedule   (stored as null)
-    On       run today even though it normally would not
-    Off      do not run today even though it normally would
+  Pick 3     3 boxes,  one digit each   ->  advances on every digit
+  Cash 4     4 boxes,  one digit each   ->  advances on every digit
+  Lotto      5 boxes,  1-34             ->  see below
+  Super 6    6 boxes,  1-28             ->  see below
+  Play Way   1 box,    1-36
 
-The "On" state is what makes a MOVE possible rather than just a cancellation.
+TWO-DIGIT FIELDS ARE SMARTER THAN A SIMPLE COUNT
 
+They advance as soon as no longer number could still be valid:
 
-MOVING SUPER 6 FROM A HOLIDAY TUESDAY TO WEDNESDAY
+  Lotto (1-34)   type 3  -> waits  (34 is still possible)
+                 type 4  -> advances (40+ is out of range)
+                 type 34 -> advances
+                 type 35 -> rejected, box unchanged
 
-  On the Tuesday   set status Disrupted, Super 6 -> Off,
-                   notice: "Super 6 moves to Wednesday 16 September due to
-                   the public holiday."
-  On the Wednesday set status Disrupted, Super 6 -> On,
-                   notice: "Includes Tuesday's Super 6 draw."
+  Super 6 (1-28) type 2  -> waits  (28 is still possible)
+                 type 3  -> advances
+                 type 29 -> rejected
 
-Wednesday then runs its usual Lotto AND the moved Super 6. Verified.
+So single-digit numbers do not need a leading zero and do not stall the
+operator waiting for a second keystroke.
 
-The panel reminds you: after changing one day it says "Remember to set the
-matching change on the day it moves to." A move is always two edits.
-
-
-DRAW NUMBERS TRAVEL WITH THE DRAW
-
-Draw numbers are stored per game, not derived from the date, so a moved Super 6
-keeps its correct sequence number. The draw-number field also warns if a gap
-appears ("1 number skipped since 2611. Fine after a cancelled draw — just check
-it was."), so a genuine cancellation is distinguishable from a mistake.
+Backspace on an empty box still clears; up/down arrows still step the value.
 
 
-OTHER CASES THIS COVERS
-
-  Equipment failure, one game only   that game -> Off, notice explains
-  Whole day lost (disaster, storm)   status -> Cancelled, everything stops
-  Extra draw added                   that game -> On
+2. WORDING
+----------
+The day-plan example now reads:
+  "Includes Tuesday's Rescheduled Super 6 draw."
 
 
 FILES
-  src/components/Rail.jsx   DayPlan component
-  src/styles.css            styling
-
-No database change: draw_days already has daily_on, cash_pop_on, lotto_on and
-super6_on. They were simply never editable from the app — only by SQL.
+  src/components/Ball.jsx      auto-advance timing and two-digit logic
+  src/views/ResultsView.jsx    auto-advance wired for Lotto and Super 6
+  src/components/Rail.jsx      day plan panel (from the previous update)
+  src/styles.css               day plan styling
 
 DEPLOY
   git add -A
-  git commit -m "Add day plan panel for holiday and disruption moves"
+  git commit -m "Fix number entry auto-advance; add day plan panel"
   git push
 
-
-WHAT THIS DOES NOT DO YET
-
-Draw TIMES are still fixed. There is no way to record "the Evening draw ran at
-8:30 because of the power cut". That matters because the OMP API validates
-draw_date against expected time slots, and its /next response shows it already
-accepts several (12:45, 18:15, 18:45, 19:15, 19:45, 20:15, 20:45) — but the app
-can only ever send the scheduled one. That is the natural next step if you find
-you need it.
+TEST
+  Open a Pick 3 draw and type three digits without touching the mouse.
+  Then a Lotto draw: type 4 11 19 27 33 — each should advance by itself, and
+  focus should stop on the fifth box rather than wrapping.

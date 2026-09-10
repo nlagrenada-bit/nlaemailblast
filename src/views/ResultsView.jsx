@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   DAILY_PERIODS, CASH_POP_PERIODS, MULTIPLIERS, GAMES, LETTERS,
   gamesScheduledOn, longDate, symbolFor,
@@ -522,6 +522,7 @@ function PopEntry({ row, period, onPatch, nextNos, includeEarlier, setIncludeEar
 }
 
 function JackpotEntry({ which, row, onPatch, settings, nextNos }) {
+  const numbersRef = useRef(null);
   const isLotto = which === 'lotto';
   const cfg = isLotto ? GAMES.lotto : GAMES.super6;
   const pick = isLotto ? 5 : 6;
@@ -568,12 +569,17 @@ function JackpotEntry({ which, row, onPatch, settings, nextNos }) {
         <div className="row">
           <div className="field">
             <label>Winning numbers</label>
-            <div className="balls">
+            <div className="balls" ref={numbersRef}>
               {numbers.map((n, i) => (
                 <BallInput
                   key={i} style={style} value={n} min={1} max={max} width={2}
                   label={`${cfg.name} number ${i + 1}`}
                   onChange={(v) => setNumber(i, v)}
+                  autoAdvance={() => {
+                    // Stop at the last box rather than wrapping round.
+                    const inputs = numbersRef.current?.querySelectorAll('input');
+                    inputs?.[i + 1]?.focus();
+                  }}
                 />
               ))}
             </div>

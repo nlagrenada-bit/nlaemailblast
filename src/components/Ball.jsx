@@ -29,17 +29,39 @@ export function BallInput({
   const ref = useRef(null);
   const filled = value !== '' && value !== null && value !== undefined;
 
+  /* Move to the next box AFTER React has committed this one. Advancing in the
+     same tick as onChange moved focus before the value was applied, which is
+     what made the second digit misbehave. */
+  const advance = () => {
+    if (!autoAdvance) return;
+    setTimeout(autoAdvance, 0);
+  };
+
   function handle(e) {
     const raw = e.target.value.replace(/[^\d]/g, '').slice(0, width);
     if (raw === '') return onChange('');
+
     const n = Number(raw);
+
     if (n > max) {
-      // Two-digit games: '3' is valid on the way to '35', but '37' is not.
+      // Reject only when nothing longer could still be valid. For a 1-36 field
+      // '3' is fine on the way to '35', but '37' is not.
       if (raw.length >= String(max).length) return;
-      return onChange(n);
+      onChange(n);
+      return;
     }
+
     onChange(n);
-    if (autoAdvance && raw.length >= width) autoAdvance();
+
+    // When is this box finished?
+    //   single digit  -> as soon as one digit is typed
+    //   two digit     -> at two digits, OR at one when no second digit could
+    //                    keep it in range (e.g. '4' in a 1-34 field: 40+ is out)
+    let done = raw.length >= width;
+    if (!done && width > 1) {
+      done = Number(raw + '0') > max;
+    }
+    if (done) advance();
   }
 
   function keyDown(e) {
