@@ -28,12 +28,21 @@ export async function pushResultsEverywhere(doc) {
 
   // A single summary the caller can report without knowing the shapes.
   let sent = 0, failed = 0;
-  const skipped = [];
+  const notConfigured = [];      // a whole target that is switched off
+  const incomplete = [];         // a game that could not be sent, and why
+  const errors = [];             // a game that was sent and rejected
+
   for (const [name, t] of Object.entries(targets)) {
-    if (t.skipped) { skipped.push(`${name}: ${t.reason}`); continue; }
+    if (t.skipped) { notConfigured.push(`${name}: ${t.reason}`); continue; }
     sent += t.sent || 0;
     failed += t.failed?.length || 0;
+    for (const s of t.skipped || []) {
+      if (!incomplete.includes(s)) incomplete.push(s);   // same on both targets
+    }
+    for (const f of t.failed || []) {
+      errors.push(`${name} ${f.game || ''} ${f.error || ''}`.trim());
+    }
   }
 
-  return { sent, failed, skipped, targets };
+  return { sent, failed, skipped: notConfigured, incomplete, errors, targets };
 }

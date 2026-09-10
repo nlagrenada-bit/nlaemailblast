@@ -222,12 +222,26 @@ export default function ResultsView({ date, settings, groups, canSend }) {
     try {
       if (dbOnly) {
         const r = await api.pushToWebsite(date);
-        const failed = r?.website?.failed?.length || 0;
         const sent = r?.website?.sent ?? 0;
-        toast(failed
-          ? `Website updated with ${sent} result(s); ${failed} failed.`
-          : `Website updated with ${sent} result(s). No email sent.`,
-          failed ? 'info' : 'good');
+        const failed = r?.website?.failed ?? 0;
+        const incomplete = r?.incomplete || [];
+
+        // A game with a result but no draw number cannot be sent. Say so
+        // plainly — otherwise it looks like a push that simply did nothing.
+        if (incomplete.length) {
+          toast(
+            `Sent ${sent}. Not sent: ${incomplete.join('; ')}. `
+            + `Add the missing draw number, then update again.`,
+            'bad',
+          );
+        } else if (failed) {
+          toast(`Websites updated with ${sent} result(s); ${failed} failed. `
+            + `${(r.errors || []).join(' | ')}`, 'info');
+        } else if (sent === 0) {
+          toast('Nothing was sent — check the results are entered for this day.', 'info');
+        } else {
+          toast(`Websites updated with ${sent} result(s). No email sent.`, 'good');
+        }
         setDialog(false);
         return;
       }

@@ -66,12 +66,18 @@ const ascending = (nums) => [...nums].map(Number).sort((a, b) => a - b);
  * Build one API payload per game result for a day.
  * Each entry is { game, drawNumber, body } ready to send.
  */
-export function buildApiPayloads({ date, daily = [], cashPops = [], lotto = null, super6 = null }) {
+export function buildApiPayloads({ date, daily = [], cashPops = [], lotto = null, super6 = null }, skipped = []) {
   const out = [];
+
+  // A game is only sent when it has BOTH a result and a draw number. Anything
+  // half-entered is recorded in `skipped` rather than dropped silently — a
+  // silent skip looks exactly like a successful push that changed nothing.
+  const note = (game, why) => skipped.push(`${game}: ${why}`);
 
   for (const row of daily) {
     const when = `${date} ${DAILY_TIME[row.period] || '00:00:00'}`;
 
+    if (row.play_way_number != null && !row.play_way_draw_no) note('Play Way', `${row.period} has a number but no draw number`);
     if (row.play_way_number != null && row.play_way_draw_no) {
       out.push({ game: 'play_way', drawNumber: row.play_way_draw_no, body: {
         draw_number: row.play_way_draw_no,
@@ -80,6 +86,7 @@ export function buildApiPayloads({ date, daily = [], cashPops = [], lotto = null
         multiplier: row.play_way_multiplier || '',
       }});
     }
+    if (row.pick3_digits?.length && !row.pick3_draw_no) note('Pick 3', `${row.period} has digits but no draw number`);
     if (row.pick3_digits?.length && row.pick3_draw_no) {
       out.push({ game: 'pick3', drawNumber: row.pick3_draw_no, body: {
         draw_number: row.pick3_draw_no,
@@ -88,6 +95,7 @@ export function buildApiPayloads({ date, daily = [], cashPops = [], lotto = null
         multiplier: row.pick3_multiplier || '',
       }});
     }
+    if (row.cash4_digits?.length && !row.cash4_draw_no) note('Cash 4', `${row.period} has digits but no draw number`);
     if (row.cash4_digits?.length && row.cash4_draw_no) {
       out.push({ game: 'cash4', drawNumber: row.cash4_draw_no, body: {
         draw_number: row.cash4_draw_no,
@@ -99,6 +107,7 @@ export function buildApiPayloads({ date, daily = [], cashPops = [], lotto = null
   }
 
   for (const p of cashPops) {
+    if (p.number != null && !p.draw_no && !p.cancelled) note('Cash Pop', `${p.period} has a number but no draw number`);
     if (p.number == null || !p.draw_no || p.cancelled) continue;
     out.push({ game: 'cash_pop', drawNumber: p.draw_no, body: {
       draw_number: p.draw_no,
@@ -119,6 +128,7 @@ export function buildApiPayloads({ date, daily = [], cashPops = [], lotto = null
   // jackpot_winners > 0 means the jackpot was won and legitimately resets to a
   // lower figure, so we flag that for the portal's progression check.
   for (const [game, row] of [['lotto', lotto], ['super6', super6]]) {
+    if (row?.numbers?.length && !row.draw_no) note(game === 'lotto' ? 'Lotto' : 'Super 6', 'has numbers but no draw number');
     if (!row?.numbers?.length || !row.draw_no) continue;
 
     const body = {
@@ -228,7 +238,8 @@ export async function pushResultsToWebsite(doc, opts = {}) {
   if (!BASE())  return { skipped: true, reason: 'WEBSITE_API_BASE not set' };
   if (!TOKEN()) return { skipped: true, reason: 'WEBSITE_API_TOKEN not set' };
 
-  const payloads = buildApiPayloads(doc);
+  const skipped = [];
+  const payloads = buildApiPayloads(doc, skipped);
   const results = [];
 
   for (const p of payloads) {
@@ -237,7 +248,7 @@ export async function pushResultsToWebsite(doc, opts = {}) {
   }
 
   const failed = results.filter((r) => !r.ok);
-  return { sent: results.length - failed.length, failed, results };
+  return { sent: results.length - failed.length, failed, results, skipped };
 }
 
 /** Dry run: full validation on the portal, nothing written. */

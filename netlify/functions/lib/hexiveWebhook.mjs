@@ -61,8 +61,9 @@ const ascending = (nums) => [...nums].map(Number).sort((a, b) => a - b);
  * Build one webhook payload per game result for a day.
  * Returns [{ game, drawId, body }].
  */
-export function buildHexivePayloads({ date, daily = [], cashPops = [], lotto = null, super6 = null }) {
+export function buildHexivePayloads({ date, daily = [], cashPops = [], lotto = null, super6 = null }, skipped = []) {
   const out = [];
+  const note = (game, why) => skipped.push(`${game}: ${why}`);
 
   if (lotto?.numbers?.length >= 5 && lotto.draw_no) {
     const n = ascending(lotto.numbers);
@@ -95,6 +96,7 @@ export function buildHexivePayloads({ date, daily = [], cashPops = [], lotto = n
     const type = DAILY_TYPE[row.period];
     if (!type) continue;                       // unknown slot: skip rather than guess
 
+    if (row.cash4_digits?.length === 4 && !row.cash4_draw_no) note('Cash 4', `${row.period} has digits but no draw number`);
     if (row.cash4_digits?.length === 4 && row.cash4_draw_no) {
       const d = row.cash4_digits;
       out.push({ game: 'cash4', drawId: row.cash4_draw_no, body: {
@@ -108,6 +110,7 @@ export function buildHexivePayloads({ date, daily = [], cashPops = [], lotto = n
       }});
     }
 
+    if (row.pick3_digits?.length === 3 && !row.pick3_draw_no) note('Pick 3', `${row.period} has digits but no draw number`);
     if (row.pick3_digits?.length === 3 && row.pick3_draw_no) {
       const d = row.pick3_digits;
       out.push({ game: 'pick3', drawId: row.pick3_draw_no, body: {
@@ -120,6 +123,7 @@ export function buildHexivePayloads({ date, daily = [], cashPops = [], lotto = n
       }});
     }
 
+    if (row.play_way_number != null && !row.play_way_draw_no) note('Play Way', `${row.period} has a number but no draw number`);
     if (row.play_way_number != null && row.play_way_draw_no) {
       out.push({ game: 'play_way', drawId: row.play_way_draw_no, body: {
         draw_type: type,
@@ -186,14 +190,15 @@ export async function pushResultsToHexive(doc) {
   if (!BASE())   return { skipped: true, reason: 'HEXIVE_WEBHOOK_BASE not set' };
   if (!SECRET()) return { skipped: true, reason: 'HEXIVE_WEBHOOK_SECRET not set' };
 
-  const payloads = buildHexivePayloads(doc);
+  const skipped = [];
+  const payloads = buildHexivePayloads(doc, skipped);
   const results = [];
   for (const p of payloads) {
     results.push(await sendOne(p));
     await sleep(300);
   }
   const failed = results.filter((r) => !r.ok);
-  return { sent: results.length - failed.length, failed, results };
+  return { sent: results.length - failed.length, failed, results, skipped };
 }
 
 // ---------------------------------------------------------------------------

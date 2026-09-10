@@ -180,7 +180,14 @@ export default async (request) => {
     }, 422);
   }
 
-  return json({ ok: true, website, jackpotUpdates: extras });
+  return json({
+    ok: true,
+    website,
+    jackpotUpdates: extras,
+    // Surfaced so a half-entered game is never mistaken for a successful push.
+    incomplete: website.incomplete?.length ? website.incomplete : undefined,
+    errors: website.errors?.length ? website.errors : undefined,
+  });
 };
 
 export const config = { path: '/api/push-website' };

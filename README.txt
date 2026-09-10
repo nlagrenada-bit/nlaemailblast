@@ -1,81 +1,68 @@
-TEST DATA WENT PUBLIC — FIXED
-==============================
+WHY A MULTI-X UPDATE CAN GO NOWHERE — AND HOW YOU NOW SEE IT
+=============================================================
 
-WHAT WENT WRONG (my error)
+WHAT I TESTED
 
-The public results page reads the results tables directly, and the app saves as
-you type. The public view had NO published filter, so the moment you keyed a
-test Pick 3 it appeared on the public site.
+I ran the real push code for a Cash 4 multiplier-only change against mocks of
+both sites. It works correctly:
 
-Entering numbers should never publish them. Now it doesn't.
+  OMP   POST /results/cash4        -> 409 (draw already exists)
+        PUT  /results/cash4/7818   -> multiplier 5X stored
+  WP    POST /wp-json/cash4/v1/webhook  {"cash_4_multi_x":"5X", ...}
 
-
-THE FIX — A PUBLISH GATE
-
-  published_at added to daily_results, cash_pop_results, lotto_results,
-  super6_results.
-
-  The public views (public_results and public_archive) now require
-  published_at to be set. Nothing else changes for the reader.
-
-  published_at is set in exactly two places, both deliberate operator actions:
-    - a blast is sent
-    - "Update the website/database only" is pressed
-
-  So typed, half-typed and test entries stay inside the app until someone
-  chooses to publish them.
-
-BACKFILL: the migration marks everything already live as published, so the
-public page does not go blank on deploy. Past days and any day with a completed
-blast are treated as published.
+So POST-then-PUT does upsert, on both targets.
 
 
-THE CLEAR BUTTON
+THE REAL WEAKNESS: SILENT SKIPS
 
-"Clear this draw" now sits in the results header. It warns before acting:
+A game is only sent when it has BOTH a result AND a draw number:
 
-    Clear Mid-Morning Draw?
-    This permanently deletes the numbers, multipliers and payouts entered
-    for it. It cannot be undone.
-    Results that have already been sent or published are protected and
-    will not be cleared.
+    if (row.cash4_digits?.length && row.cash4_draw_no) { ... }
 
-PUBLISHED DRAWS CANNOT BE CLEARED. A result that has gone to media houses must
-be corrected and resent — using the RESENT option — not silently deleted.
-Attempting it returns:
-    "That draw has already been published. Correct it and resend instead."
+If the DRAW NUMBER is missing, the whole game was skipped with no message. You
+would press "Update the website only", get a success toast, and nothing would
+have been sent. That is almost certainly what happened.
+
+The same applied to Play Way, Pick 3, Cash Pop, Lotto and Super 6.
 
 
-DEPLOY — IN THIS ORDER
+WHAT CHANGES
 
-  1. Run supabase/08_published_gate.sql in the Supabase SQL editor.
-     Do this FIRST. The app writes published_at, so the column must exist.
+Every skip is now reported, on both targets, and surfaced in the app:
 
-  2. Deploy the code:
-       git add -A
-       git commit -m "Publish gate: results go public only when sent; add clear button"
-       git push
+    "Sent 3. Not sent: Cash 4: mid_morning has digits but no draw number.
+     Add the missing draw number, then update again."
+
+Other outcomes are now distinct too, instead of all reading as success:
+
+    nothing entered      "Nothing was sent — check the results are entered
+                          for this day."
+    a target rejected    "Websites updated with 3 result(s); 1 failed."
+                          followed by the actual error text
+    all good             "Websites updated with 4 result(s). No email sent."
 
 
-CLEAN UP THE TEST DATA YOU ALREADY POSTED
+CHECK THIS FIRST ON YOUR CASH 4
 
-After running the SQL, that Pick 3 test entry will be unpublished (it was never
-sent), so it disappears from the public site by itself. To remove it from the
-app as well, open the draw and press "Clear this draw".
+Open the draw and look at the DRAW NUMBER field. If it is showing a grey
+suggestion rather than a saved black value, press "Use <number>" to commit it,
+then update the websites again.
 
-To see what is currently held back:
+    select draw_date, period, cash4_digits, cash4_multiplier, cash4_draw_no
+    from daily_results
+    where draw_date = '2026-09-10';
 
-  select draw_date, period,
-         published_at is not null as published
-  from daily_results
-  where draw_date >= current_date - 3
-  order by draw_date desc, period;
+A null cash4_draw_no confirms it.
 
 
 FILES
-  supabase/08_published_gate.sql              the gate + backfill + rebuilt views
-  netlify/functions/lib/publish.mjs           NEW - marks results published
-  netlify/functions/push-website.mjs          marks published after a push
-  netlify/functions/send-blast-slice.mjs      marks published after a send
-  src/lib/api.js                              clearDraw + clearUnpublishedDay
-  src/views/ResultsView.jsx                   the Clear this draw button
+  netlify/functions/lib/websiteWebhook.mjs   skip reporting
+  netlify/functions/lib/hexiveWebhook.mjs    skip reporting
+  netlify/functions/lib/pushAll.mjs          collects incomplete + errors
+  netlify/functions/push-website.mjs         returns them
+  src/views/ResultsView.jsx                  shows them in the toast
+
+DEPLOY
+  git add -A
+  git commit -m "Report games that cannot be pushed instead of skipping silently"
+  git push
