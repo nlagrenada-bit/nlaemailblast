@@ -315,3 +315,47 @@ export async function pushToWebsite(drawDate) {
   if (!res.ok) throw new Error(body.error || 'The website update failed.');
   return body;
 }
+
+// ------------------------------------------------------- clearing a draw
+
+/**
+ * Wipe the entered values for one draw. Used to remove test data.
+ * Only ever clears results that have NOT been published — a sent result must
+ * be corrected and resent, not silently deleted.
+ */
+export async function clearDraw({ date, kind, period }) {
+  if (kind === 'lotto' || kind === 'super6') {
+    const table = kind === 'lotto' ? 'lotto_results' : 'super6_results';
+    const { data: row } = await supabase.from(table)
+      .select('published_at').eq('draw_date', date).maybeSingle();
+    if (row?.published_at) throw new Error('That draw has already been published. Correct it and resend instead.');
+    return supabase.from(table).delete().eq('draw_date', date).then(unwrap);
+  }
+
+  if (kind === 'pop') {
+    const { data: row } = await supabase.from('cash_pop_results')
+      .select('published_at').eq('draw_date', date).eq('period', period).maybeSingle();
+    if (row?.published_at) throw new Error('That draw has already been published. Correct it and resend instead.');
+    return supabase.from('cash_pop_results').delete()
+      .eq('draw_date', date).eq('period', period).then(unwrap);
+  }
+
+  // daily: one row holds all three games for the slot
+  const { data: row } = await supabase.from('daily_results')
+    .select('published_at').eq('draw_date', date).eq('period', period).maybeSingle();
+  if (row?.published_at) throw new Error('That draw has already been published. Correct it and resend instead.');
+  return supabase.from('daily_results').delete()
+    .eq('draw_date', date).eq('period', period).then(unwrap);
+}
+
+/** Clear every unpublished result for a date. For clearing a day of testing. */
+export async function clearUnpublishedDay(date) {
+  const tables = ['daily_results', 'cash_pop_results', 'lotto_results', 'super6_results'];
+  let removed = 0;
+  for (const t of tables) {
+    const { data } = await supabase.from(t).delete()
+      .eq('draw_date', date).is('published_at', null).select('draw_date');
+    removed += (data || []).length;
+  }
+  return removed;
+}

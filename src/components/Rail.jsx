@@ -179,6 +179,14 @@ function DayPlan({ day, isoDate, onDayChange }) {
 
   const set = (key, value) => onDayChange({ [key]: value });
 
+  // Append a suggested sentence to the notice without disturbing what is
+  // already written. The operator can then edit it freely, or delete it.
+  const appendNotice = (text) => {
+    const current = (day?.notice || '').trim();
+    if (current.includes(text)) return;               // don't add it twice
+    onDayChange({ notice: current ? `${current} ${text}` : text });
+  };
+
   const changed = PLAN_GAMES.filter(([k]) => day?.[k] != null && day[k] !== usualFor[k]);
 
   return (
@@ -214,14 +222,42 @@ function DayPlan({ day, isoDate, onDayChange }) {
       })}
 
       {changed.length > 0 && (
-        <p className="dayplan-note">
-          {changed.map(([k, label]) => (
-            <span key={k}>
-              <b>{label}</b> {day[k] ? 'added to' : 'removed from'} today.{' '}
-            </span>
-          ))}
-          Remember to set the matching change on the day it moves to.
-        </p>
+        <div className="dayplan-note">
+          <p style={{ margin: 0 }}>
+            {changed.map(([k, label]) => (
+              <span key={k}>
+                <b>{label}</b> {day[k] ? 'added to' : 'removed from'} today.{' '}
+              </span>
+            ))}
+            A move is two edits — set the matching change on the other day too.
+          </p>
+
+          {/* Optional wording. The notice above is free text and whatever the
+              operator writes always wins; these just save typing. Nothing is
+              inserted unless one is clicked. */}
+          <div className="dayplan-suggest">
+            <span>Add to the notice:</span>
+            {changed.map(([key, label]) => {
+              const k = key;
+              // "Daily games" is plural, so it needs different phrasing from
+              // the single-draw games.
+              const plural = key === 'daily_on';
+              const text = day[k]
+                ? (plural
+                    ? 'Includes the rescheduled daily draws.'
+                    : `Includes the rescheduled ${label} draw.`)
+                : (plural
+                    ? "Today's daily draws have been rescheduled."
+                    : `Today's ${label} draw has been rescheduled.`);
+              return (
+                <button key={k} type="button" onClick={() => appendNotice(text)}
+                  title="Adds this sentence to the notice. You can edit it afterwards.">
+                  {text}
+                </button>
+              );
+            })}
+          </div>
+        </div>
       )}
     </div>
   );

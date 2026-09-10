@@ -194,6 +194,28 @@ export default function ResultsView({ date, settings, groups, canSend }) {
   // -------------------------------------------------------- what to render
 
   // -------------------------------------------------------------- sending
+  /* Remove the entered values for this draw. Meant for clearing test entries.
+     A published draw is protected — a result that has gone out must be
+     corrected and resent, not quietly deleted. */
+  async function clearThisDraw() {
+    const what = scope.label || 'this draw';
+    const ok = window.confirm(
+      `Clear ${what}?\n\n`
+      + `This permanently deletes the numbers, multipliers and payouts entered `
+      + `for it. It cannot be undone.\n\n`
+      + `Results that have already been sent or published are protected and `
+      + `will not be cleared.`
+    );
+    if (!ok) return;
+    try {
+      await api.clearDraw({ date, kind, period: code });
+      toast(`${what} cleared.`, 'good');
+      reload();
+    } catch (e) {
+      toast(e.message, 'bad');
+    }
+  }
+
   async function confirmSend({ groupIds, emails, isResend, dbOnly }) {
     setBusy(true);
     setProgress(null);
@@ -276,6 +298,13 @@ export default function ResultsView({ date, settings, groups, canSend }) {
         <div className="pagehead">
           <h1>{scope.label || 'Results'}</h1>
           <span className="sub">{longDate(date)}{saving ? ' · saving…' : ''}</span>
+          {scope.kind !== 'eod' && (
+            <button className="btn sm danger" style={{ marginLeft: 'auto' }}
+              onClick={clearThisDraw}
+              title="Delete the entered values for this draw. Published results are protected.">
+              Clear this draw
+            </button>
+          )}
         </div>
 
         {state.day?.status === 'cancelled' && (

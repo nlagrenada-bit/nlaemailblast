@@ -12,6 +12,7 @@ import { requireStaff } from './lib/supabaseAdmin.mjs';
 import { createClient } from '@supabase/supabase-js';
 import { pushJackpot, lastStored } from './lib/websiteWebhook.mjs';
 import { pushResultsEverywhere } from './lib/pushAll.mjs';
+import { markPublished } from './lib/publish.mjs';
 import { pushHexiveJackpot } from './lib/hexiveWebhook.mjs';
 
 const json = (b, s = 200) =>
@@ -138,6 +139,10 @@ export default async (request) => {
   ]);
 
   const website = await pushResultsEverywhere({ date: drawDate, daily, cashPops, lotto, super6 });
+
+  // Sending or pushing is what makes results public. Until this runs they are
+  // visible only inside the app.
+  if (website.sent > 0) await markPublished(admin, drawDate);
 
   // Every target unconfigured means there is nowhere to send at all.
   if (website.skipped.length === 2) {

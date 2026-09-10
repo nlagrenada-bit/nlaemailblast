@@ -13,6 +13,7 @@
 import nodemailer from 'nodemailer';
 import { createClient } from '@supabase/supabase-js';
 import { pushResultsEverywhere } from './lib/pushAll.mjs';
+import { markPublished } from './lib/publish.mjs';
 
 const SLICE_EXTERNAL = Number(process.env.SLICE_EXTERNAL || 6);
 const SLICE_GAP_MS   = Number(process.env.SLICE_GAP_MS || 3000);
@@ -151,6 +152,7 @@ export default async (request) => {
         admin.from('super6_results').select('*').eq('draw_date', date).maybeSingle().then((r) => r.data),
       ]);
       website = await pushResultsEverywhere({ date, daily, cashPops, lotto, super6 });
+      if (website?.sent > 0) await markPublished(admin, date);
     } catch (e) { website = { error: e.message }; }
 
     const c = await counts();
