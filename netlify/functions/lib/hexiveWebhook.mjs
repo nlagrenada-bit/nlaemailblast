@@ -184,11 +184,13 @@ async function sendOne({ game, drawId, body }) {
 
 /**
  * Push a day's results to the WordPress site.
- * Returns { sent, failed[], results[] } or { skipped } when unconfigured.
+ * Returns { sent, failed[], results[], skipped[] }, or { notConfigured, reason }
+ * when the target is switched off. `skipped` lists games that could not be
+ * sent; it is ALWAYS an array, so never test it for truthiness.
  */
 export async function pushResultsToHexive(doc) {
-  if (!BASE())   return { skipped: true, reason: 'HEXIVE_WEBHOOK_BASE not set' };
-  if (!SECRET()) return { skipped: true, reason: 'HEXIVE_WEBHOOK_SECRET not set' };
+  if (!BASE())   return { notConfigured: true, reason: 'HEXIVE_WEBHOOK_BASE not set' };
+  if (!SECRET()) return { notConfigured: true, reason: 'HEXIVE_WEBHOOK_SECRET not set' };
 
   const skipped = [];
   const payloads = buildHexivePayloads(doc, skipped);
@@ -223,8 +225,8 @@ const JACKPOT_PATH = {
  * @param amount  the new estimated jackpot
  */
 export async function pushHexiveJackpot(game, amount) {
-  if (!BASE())   return { skipped: true, reason: 'HEXIVE_WEBHOOK_BASE not set' };
-  if (!SECRET()) return { skipped: true, reason: 'HEXIVE_WEBHOOK_SECRET not set' };
+  if (!BASE())   return { notConfigured: true, reason: 'HEXIVE_WEBHOOK_BASE not set' };
+  if (!SECRET()) return { notConfigured: true, reason: 'HEXIVE_WEBHOOK_SECRET not set' };
 
   const path = JACKPOT_PATH[game];
   if (!path) return { ok: false, game, error: `No jackpot endpoint for "${game}".` };

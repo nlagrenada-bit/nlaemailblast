@@ -33,7 +33,10 @@ export async function pushResultsEverywhere(doc) {
   const errors = [];             // a game that was sent and rejected
 
   for (const [name, t] of Object.entries(targets)) {
-    if (t.skipped) { notConfigured.push(`${name}: ${t.reason}`); continue; }
+    // NOTE: test notConfigured, never `skipped`. `skipped` is always an array
+    // and an empty array is truthy in JavaScript — testing it made every
+    // configured target look switched off.
+    if (t.notConfigured) { notConfigured.push(`${name}: ${t.reason}`); continue; }
     sent += t.sent || 0;
     failed += t.failed?.length || 0;
     for (const s of t.skipped || []) {

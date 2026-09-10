@@ -165,6 +165,26 @@ function headers(idempotencyKey) {
  * PUT, which is how the API expects corrections. Retries only on network
  * errors, 429 and 5xx - a 4xx is a decision, not a hiccup.
  */
+/**
+ * How many draws the portal already holds for a game, cached for this run so a
+ * whole day's push only asks once per game.
+ */
+const nextCache = new Map();
+async function expectedNext(game) {
+  if (nextCache.has(game)) return nextCache.get(game);
+  const path = GAME_PATH[game] || game;
+  let value = null;
+  try {
+    const res = await fetch(`${BASE()}/results/${path}/next`, { headers: headers() });
+    if (res.ok) {
+      const j = await res.json();
+      value = Number(j.next_draw_number) || null;
+    }
+  } catch { /* fall back to POST-then-PUT below */ }
+  nextCache.set(game, value);
+  return value;
+}
+
 async function sendOne({ game, drawNumber, body }, { validate = false } = {}) {
   const path = GAME_PATH[game];
   if (!path) return { ok: false, game, error: `unknown game "${game}"` };
@@ -174,18 +194,43 @@ async function sendOne({ game, drawNumber, body }, { validate = false } = {}) {
   const putUrl  = `${BASE()}/results/${path}/${drawNumber}${q}`;
   const idem    = `${game}-${drawNumber}`;
 
+  // Decide up front whether this is a NEW draw or a CORRECTION, by asking the
+  // portal what it expects next. Guessing from the POST status code was
+  // fragile: an already-stored draw can come back as 409 OR as 422 from the
+  // sequence check, and only 409 triggered the PUT — so a correction that
+  // returned 422 was silently lost.
+  const next = await expectedNext(game);
+  const isCorrection = next != null && Number(drawNumber) < next;
+
   for (let attempt = 1; attempt <= 3; attempt++) {
     try {
-      let res = await fetch(postUrl, {
-        method: 'POST', headers: headers(idem), body: JSON.stringify(body),
-      });
+      let res;
 
-      // Already stored -> this is a correction, so update it in place.
-      if (res.status === 409) {
+      if (isCorrection) {
         res = await fetch(putUrl, {
           method: 'PUT', headers: headers(), body: JSON.stringify(body),
         });
         if (res.ok) return { ok: true, game, drawNumber, action: 'updated' };
+        // If the portal disagrees that it exists, fall through and try POST.
+        if (res.status === 404) {
+          res = await fetch(postUrl, {
+            method: 'POST', headers: headers(idem), body: JSON.stringify(body),
+          });
+        }
+      } else {
+        res = await fetch(postUrl, {
+          method: 'POST', headers: headers(idem), body: JSON.stringify(body),
+        });
+
+        // Already stored after all -> correct it in place. 422 is included
+        // because the sequence check reports duplicates that way.
+        if (res.status === 409 || res.status === 422) {
+          const put = await fetch(putUrl, {
+            method: 'PUT', headers: headers(), body: JSON.stringify(body),
+          });
+          if (put.ok) return { ok: true, game, drawNumber, action: 'updated' };
+          res = put.status === 404 ? res : put;   // keep the more useful error
+        }
       }
 
       if (res.ok) {
@@ -232,12 +277,15 @@ function summarise(status, text) {
 
 /**
  * Push a day's results to the portal.
- * Returns { sent, failed[], results[] } or { skipped } when unconfigured.
+ * Returns { sent, failed[], results[], skipped[] }, or { notConfigured, reason }
+ * when the target is switched off. `skipped` lists games that could not be
+ * sent; it is ALWAYS an array, so never test it for truthiness.
  */
 export async function pushResultsToWebsite(doc, opts = {}) {
-  if (!BASE())  return { skipped: true, reason: 'WEBSITE_API_BASE not set' };
-  if (!TOKEN()) return { skipped: true, reason: 'WEBSITE_API_TOKEN not set' };
+  if (!BASE())  return { notConfigured: true, reason: 'WEBSITE_API_BASE not set' };
+  if (!TOKEN()) return { notConfigured: true, reason: 'WEBSITE_API_TOKEN not set' };
 
+  nextCache.clear();                 // fresh view of the portal for each push
   const skipped = [];
   const payloads = buildApiPayloads(doc, skipped);
   const results = [];
@@ -257,7 +305,7 @@ export const validateResultsWithWebsite = (doc) =>
 
 /** Ask the portal what it expects next for a game - useful for diagnostics. */
 export async function nextExpected(game) {
-  if (!BASE()) return { skipped: true };
+  if (!BASE()) return { notConfigured: true };
   const path = GAME_PATH[game];
   const res = await fetch(`${BASE()}/results/${path}/next`, { headers: headers() });
   return res.ok ? res.json() : { error: `${res.status} ${await res.text().catch(() => '')}` };

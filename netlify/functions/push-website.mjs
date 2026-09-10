@@ -114,7 +114,7 @@ export default async (request) => {
 
     const failures = [];
     if (!ompR.ok && !ompR.unchanged) failures.push(`OMP: ${ompR.error}`);
-    if (!wpR.ok && !wpR.skipped)     failures.push(`WordPress: ${wpR.error}`);
+    if (!wpR.ok && !wpR.notConfigured) failures.push(`WordPress: ${wpR.error}`);
 
     if (failures.length === 2) {
       return json({ error: failures.join(' | '), source, amount }, 502);
@@ -145,7 +145,8 @@ export default async (request) => {
   if (website.sent > 0) await markPublished(admin, drawDate);
 
   // Every target unconfigured means there is nowhere to send at all.
-  if (website.skipped.length === 2) {
+  // Only an error when EVERY target is switched off.
+  if (website.skipped.length >= 2) {
     return json({ error: `No results target is configured (${website.skipped.join('; ')}).` }, 400);
   }
 
@@ -166,7 +167,7 @@ export default async (request) => {
     const hasNumbers = !!row.numbers?.length;
 
     const [o, w] = await Promise.all([
-      hasNumbers ? Promise.resolve({ skipped: true, reason: 'sent with the result' })
+      hasNumbers ? Promise.resolve({ notConfigured: false, note: 'sent with the result' })
                  : pushJackpot(game, jp, { jackpotWon: won }),
       pushHexiveJackpot(game, jp),
     ]);
