@@ -631,3 +631,21 @@ body[data-tod] .side { backdrop-filter: saturate(1.05); }
   font-size: 12.5px; color: var(--ink-2); line-height: 1.5; cursor: pointer; }
 .dbonly-toggle input { margin-top: 2px; }
 .dbonly-toggle strong { color: var(--navy); }
+
+/* ---------------------------------------------- day plan (disrupted days) */
+.dayplan { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); }
+.dayplan-head { font-family: var(--display); font-size: 10.5px; font-weight: 700;
+  letter-spacing: .09em; text-transform: uppercase; color: var(--ink-3); margin-bottom: 10px; }
+.dayplan-row { display: flex; align-items: center; gap: 10px; margin-bottom: 9px; }
+.dayplan-label { flex: 1; min-width: 0; line-height: 1.25; }
+.dayplan-label b { display: block; font-size: 12.5px; color: var(--ink); font-weight: 600; }
+.dayplan-label span { font-size: 10.5px; color: var(--ink-3); }
+.seg.sm { display: flex; background: var(--mist); border: 1px solid var(--line);
+  border-radius: 7px; padding: 2px; flex-shrink: 0; }
+.seg.sm button { border: 0; background: none; color: var(--ink-2); font: inherit;
+  font-size: 11px; font-weight: 600; padding: 4px 9px; border-radius: 5px; cursor: pointer; }
+.seg.sm button:hover { color: var(--navy); }
+.seg.sm button[aria-pressed="true"] { background: var(--navy); color: #fff; }
+.dayplan-note { margin: 11px 0 0; padding: 9px 11px; font-size: 11.5px; line-height: 1.5;
+  background: #fff8e1; border: 1px solid #f0dca0; border-radius: 8px; color: #5c4a00; }
+.dayplan-note b { color: #8a6d00; }

@@ -1,65 +1,72 @@
-SORT LOTTO AND SUPER 6 EVERYWHERE  +  JACKPOT FIX
-==================================================
+DAY PLAN — moving draws for holidays and disruptions
+=====================================================
 
-The previous update sorted the two WEBSITE feeds but not the EMAIL, because the
-email is built by a different path. This completes it.
+WHAT THIS ADDS
 
+Set the day status to "Disrupted" and a new panel appears in the rail:
 
-WHERE THE SORT NOW HAPPENS
+    WHICH GAMES RUN TODAY
+      Daily games   Play Way, Pick 3, Cash 4    [Normal] On  Off
+      Cash Pop      five draws                  [Normal] On  Off
+      Lotto         normally Mon, Wed, Fri      [Normal] On  Off
+      Super 6       normally Tue, Fri           [Normal] On  Off
 
-  shared/buildDoc.js                       the EMAIL and the on-screen preview
-  netlify/functions/lib/websiteWebhook.mjs the OMP API
-  netlify/functions/lib/hexiveWebhook.mjs  the WordPress webhooks
+Each game is three-state:
 
-buildDoc.js is the single source for both the email and the preview, so what an
-operator sees before sending is exactly what recipients get.
+    Normal   follow the usual weekly schedule   (stored as null)
+    On       run today even though it normally would not
+    Off      do not run today even though it normally would
 
-  Lotto  32 3 29 9 13     ->  03 09 13 29 32
-  Super6 25 2 28 10 8 15  ->  02 08 10 15 25 28
-
-Verified on a real rendered email:
-  "The LOTTO results ... are as follows: 03,09,13,29,32"
-  "The SUPER 6 results ... are as follows: 02,08,10,15,25,28"
-
-PICK 3 AND CASH 4 ARE NOT SORTED, anywhere. For those games the position of each
-digit IS the result - 9 0 4 is a different result from 0 4 9. Confirmed
-unchanged through the email, the preview and both website feeds.
+The "On" state is what makes a MOVE possible rather than just a cancellation.
 
 
-ALSO IN THIS UPDATE (from the previous fix)
+MOVING SUPER 6 FROM A HOLIDAY TUESDAY TO WEDNESDAY
 
-push-website.mjs had:
+  On the Tuesday   set status Disrupted, Super 6 -> Off,
+                   notice: "Super 6 moves to Wednesday 16 September due to
+                   the public holiday."
+  On the Wednesday set status Disrupted, Super 6 -> On,
+                   notice: "Includes Tuesday's Super 6 draw."
 
-    if (row.numbers?.length) continue;
+Wednesday then runs its usual Lotto AND the moved Super 6. Verified.
 
-which skipped the jackpot push whenever a draw had its numbers. That was fine
-for the OMP, whose result payload carries the jackpot - but the WordPress RESULT
-webhook has NO jackpot field, so the dedicated /update-jackpot endpoint is the
-only route to that site. On a normal draw the jackpot was skipped entirely.
+The panel reminds you: after changing one day it says "Remember to set the
+matching change on the day it moves to." A move is always two edits.
 
-Now the jackpot always goes to WordPress; the OMP still only gets a separate
-call when there are no numbers to carry it. Applies to Super 6 identically.
+
+DRAW NUMBERS TRAVEL WITH THE DRAW
+
+Draw numbers are stored per game, not derived from the date, so a moved Super 6
+keeps its correct sequence number. The draw-number field also warns if a gap
+appears ("1 number skipped since 2611. Fine after a cancelled draw — just check
+it was."), so a genuine cancellation is distinguishable from a mistake.
+
+
+OTHER CASES THIS COVERS
+
+  Equipment failure, one game only   that game -> Off, notice explains
+  Whole day lost (disaster, storm)   status -> Cancelled, everything stops
+  Extra draw added                   that game -> On
 
 
 FILES
-  shared/buildDoc.js                          NEW in this update - email sort
-  netlify/functions/lib/websiteWebhook.mjs
-  netlify/functions/lib/hexiveWebhook.mjs
-  netlify/functions/push-website.mjs
+  src/components/Rail.jsx   DayPlan component
+  src/styles.css            styling
+
+No database change: draw_days already has daily_on, cash_pop_on, lotto_on and
+super6_on. They were simply never editable from the app — only by SQL.
 
 DEPLOY
   git add -A
-  git commit -m "Sort Lotto and Super 6 ascending in the email too"
+  git commit -m "Add day plan panel for holiday and disruption moves"
   git push
 
 
-NOTE
-Sorting is applied at DISPLAY time only. The database still stores the numbers
-as they were drawn, so nothing historical is rewritten and the draw order is not
-lost.
+WHAT THIS DOES NOT DO YET
 
-
-STILL OUTSTANDING
-/api/health was showing HEXIVE_WEBHOOK_BASE and HEXIVE_WEBHOOK_SECRET as false.
-They are entered in Netlify but need a REDEPLOY to take effect. Until then no
-result webhook reaches WordPress at all.
+Draw TIMES are still fixed. There is no way to record "the Evening draw ran at
+8:30 because of the power cut". That matters because the OMP API validates
+draw_date against expected time slots, and its /next response shows it already
+accepts several (12:45, 18:15, 18:45, 19:15, 19:45, 20:15, 20:45) — but the app
+can only ever send the scheduled one. That is the natural next step if you find
+you need it.

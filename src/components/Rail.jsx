@@ -1,5 +1,5 @@
 import React from 'react';
-import { DAILY_PERIODS, CASH_POP_PERIODS } from '../../shared/config.js';
+import { DAILY_PERIODS, CASH_POP_PERIODS, gamesScheduledOn } from '../../shared/config.js';
 import { minutesNow, toMinutes, to12h } from '../lib/dates.js';
 
 /**
@@ -81,6 +81,10 @@ export default function Rail({
             aria-label="Disruption notice"
           />
         )}
+
+        {day?.status === 'disrupted' && (
+          <DayPlan day={day} isoDate={date} onDayChange={onDayChange} />
+        )}
       </div>
 
       <hr />
@@ -140,5 +144,85 @@ export default function Rail({
         </div>
       </div>
     </aside>
+  );
+}
+
+
+/* -------------------------------------------------------------- day plan
+
+   Which games run on a disrupted day. Each toggle is three-state:
+
+     Normal  - follow the usual weekly schedule (stored as null)
+     On      - run today even though it normally would not
+     Off     - do not run today even though it normally would
+
+   That third state is the point. Moving Tuesday's Super 6 to Wednesday is two
+   edits: Off on the Tuesday, On on the Wednesday. Draw numbers are stored per
+   game rather than derived from the date, so the moved draw keeps its correct
+   sequence number.
+*/
+
+const PLAN_GAMES = [
+  ['daily_on',    'Daily games',  'Play Way, Pick 3, Cash 4'],
+  ['cash_pop_on', 'Cash Pop',     'five draws'],
+  ['lotto_on',    'Lotto',        'normally Mon, Wed, Fri'],
+  ['super6_on',   'Super 6',      'normally Tue, Fri'],
+];
+
+function DayPlan({ day, isoDate, onDayChange }) {
+  // What the weekly schedule would do, so "Normal" can say which it means.
+  const usual = gamesScheduledOn(isoDate, null);
+  const usualFor = {
+    daily_on: usual.daily, cash_pop_on: usual.cash_pop,
+    lotto_on: usual.lotto, super6_on: usual.super6,
+  };
+
+  const set = (key, value) => onDayChange({ [key]: value });
+
+  const changed = PLAN_GAMES.filter(([k]) => day?.[k] != null && day[k] !== usualFor[k]);
+
+  return (
+    <div className="dayplan">
+      <div className="dayplan-head">Which games run today</div>
+
+      {PLAN_GAMES.map(([key, label, hint]) => {
+        const value = day?.[key];                 // null | true | false
+        const normally = usualFor[key];
+        return (
+          <div className="dayplan-row" key={key}>
+            <div className="dayplan-label">
+              <b>{label}</b>
+              <span>{hint}</span>
+            </div>
+            <div className="seg sm" role="group" aria-label={label}>
+              <button type="button" aria-pressed={value == null}
+                onClick={() => set(key, null)}
+                title={`Follow the usual schedule (${normally ? 'runs' : 'does not run'} today)`}>
+                Normal
+              </button>
+              <button type="button" aria-pressed={value === true}
+                onClick={() => set(key, true)} title="Run today">
+                On
+              </button>
+              <button type="button" aria-pressed={value === false}
+                onClick={() => set(key, false)} title="Do not run today">
+                Off
+              </button>
+            </div>
+          </div>
+        );
+      })}
+
+      {changed.length > 0 && (
+        <p className="dayplan-note">
+          {changed.map(([k, label]) => (
+            <span key={k}>
+              <b>{label}</b> {day[k] ? 'added to' : 'removed from'} today.{' '}
+            </span>
+          ))}
+          Remember to set the matching change on the day it moves to.
+        </p>
+      )}
+    </div>
   );
 }
