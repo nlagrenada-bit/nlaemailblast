@@ -45,6 +45,11 @@ function dailyRow(row) {
  *   settings    { greeting, letter_words, footer }
  *   day         draw_days row or null
  */
+// Lotto and Super 6 are published smallest to largest, the convention on every
+// lottery results page. Pick 3 and Cash 4 are NOT sorted anywhere: for those
+// games the position of each digit is the result.
+const ascending = (nums) => [...(nums || [])].map(Number).sort((a, b) => a - b);
+
 export function buildDoc(input) {
   const {
     date, kind, daily = [], cashPops = [], lotto = null, super6 = null,
@@ -85,7 +90,7 @@ export function buildDoc(input) {
   if (lotto) {
     doc.lotto = {
       drawNo: lotto.draw_no ?? null,
-      numbers: lotto.numbers || [],
+      numbers: ascending(lotto.numbers),
       letter: lotto.free_ticket_letter || null,
       letterWord: words[lotto.free_ticket_letter] || '',
       match4Winners: lotto.match4_winners || 0,
@@ -100,7 +105,7 @@ export function buildDoc(input) {
   if (super6) {
     doc.super6 = {
       drawNo: super6.draw_no ?? null,
-      numbers: super6.numbers || [],
+      numbers: ascending(super6.numbers),
       letter: super6.free_ticket_letter || null,
       letterWord: words[super6.free_ticket_letter] || '',
       match4Winners: super6.match4_winners || 0,
