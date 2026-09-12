@@ -37,8 +37,15 @@ export function BallInput({
     setTimeout(autoAdvance, 0);
   };
 
+  /* Focusing by keyboard or click already selects the contents; the helper
+     below does the same after an automatic advance. */
+
   function handle(e) {
-    const raw = e.target.value.replace(/[^\d]/g, '').slice(0, width);
+    /* Keep the LAST digits, not the first.
+       Typing into a box that already holds a value appends: '0' + '4' = '04'.
+       slice(0, width) kept the '0' and threw the new digit away, so the box
+       appeared stuck until the operator highlighted it by hand. */
+    const raw = e.target.value.replace(/[^\d]/g, '').slice(-width);
     if (raw === '') return onChange('');
 
     const n = Number(raw);
@@ -127,7 +134,10 @@ export function DigitRow({ count, digits, onChange, style, label }) {
           onChange={(nv) => set(i, nv)}
           autoAdvance={() => {
             const inputs = refs.current.root?.querySelectorAll('input');
-            inputs?.[i + 1]?.focus();
+            const next = inputs?.[i + 1];
+            // Select as well as focus, so the next digit simply overwrites
+            // whatever is there instead of appending to it.
+            if (next) { next.focus(); next.select(); }
           }}
         />
       ))}

@@ -430,15 +430,72 @@ function GameCard({ logoFile, title, hint, children }) {
   );
 }
 
+/**
+ * Resolve what the operator typed into a single amount.
+ *
+ * Payouts arrive on two lines in the Abrazo report — the base prize and the
+ * Multi-X prize — and the figure we publish is the sum. So the field accepts
+ * "13704+34464" and resolves it to 48168, rather than making someone reach for
+ * a calculator and retype the answer.
+ *
+ * Deliberately limited to TWO figures and addition only. This is a convenience
+ * for one known case, not a formula box, and a field that quietly evaluates
+ * arbitrary expressions is a field that quietly gets things wrong.
+ *
+ * Returns { total, parts, error }.
+ */
+export function resolveAmount(raw) {
+  const text = String(raw ?? '').trim();
+  if (text === '') return { total: null, parts: [], error: null };
+
+  // A trailing + is normal mid-typing: "13704+" just means 13704 so far.
+  const pieces = text.replace(/\s+/g, '').split('+').filter((x) => x !== '');
+
+  if (pieces.length === 0) return { total: null, parts: [], error: null };
+  if (pieces.length > 2) {
+    return { total: null, parts: [], error: 'Only two figures can be added.' };
+  }
+
+  const nums = [];
+  for (const piece of pieces) {
+    if (!/^\d*\.?\d*$/.test(piece)) {
+      return { total: null, parts: [], error: 'Numbers only, with one + to add two figures.' };
+    }
+    const n = Number(piece);
+    if (!Number.isFinite(n)) {
+      return { total: null, parts: [], error: 'That is not a number.' };
+    }
+    nums.push(n);
+  }
+
+  // Round to cents so 0.1 + 0.2 does not become 0.30000000000000004.
+  const total = Math.round(nums.reduce((a, b) => a + b, 0) * 100) / 100;
+  return { total, parts: nums, error: null };
+}
+
 function MoneyField({ label, value, onChange }) {
+  const { total, parts, error } = resolveAmount(value);
+  const showSum = parts.length === 2 && !error;
+
   return (
     <div className="field">
       <label>{label}</label>
       <input
-        className="money" type="text" inputMode="decimal"
-        value={value ?? ''} placeholder="0.00"
-        onChange={(e) => onChange(e.target.value.replace(/[^\d.]/g, ''))}
+        className={`money${error ? ' bad' : ''}`} type="text" inputMode="decimal"
+        value={value ?? ''} placeholder="0.00  or  1200+450"
+        title="Enter one figure, or add two with + (for example the base prize + the Multi-X prize)"
+        onChange={(e) => onChange(e.target.value.replace(/[^\d.+]/g, ''))}
       />
+      {showSum && (
+        <div className="sumhint">
+          {parts[0].toLocaleString('en-US', { minimumFractionDigits: 2 })}
+          {' + '}
+          {parts[1].toLocaleString('en-US', { minimumFractionDigits: 2 })}
+          {' = '}
+          <strong>${total.toLocaleString('en-US', { minimumFractionDigits: 2 })}</strong>
+        </div>
+      )}
+      {error && <div className="sumhint bad">{error}</div>}
     </div>
   );
 }
@@ -451,7 +508,10 @@ function DailyEntry({ row, period, onPatch, nextNos }) {
   const pay = (key) => payouts[key] ?? row?.[key] ?? '';
   const commitPay = (key) => {
     if (payouts[key] === undefined) return;
-    onPatch({ [key]: payouts[key] === '' ? null : Number(payouts[key]) });
+    // "1200+450" is saved as 1650. The typed expression is never stored.
+    const { total, error } = resolveAmount(payouts[key]);
+    if (error) return;                       // the field already shows why
+    onPatch({ [key]: total });
   };
 
   return (
@@ -582,7 +642,11 @@ function PopEntry({ row, period, onPatch, nextNos, includeEarlier, setIncludeEar
         />
         <button
           className="btn sm"
-          onClick={() => payout !== undefined && onPatch({ payout: payout === '' ? null : Number(payout) })}
+          onClick={() => {
+            if (payout === undefined) return;
+            const { total, error } = resolveAmount(payout);
+            if (!error) onPatch({ payout: total });
+          }}
         >Save payout</button>
       </div>
 
@@ -610,8 +674,18 @@ function JackpotEntry({ which, row, onPatch, settings, nextNos }) {
   const [draft, setDraft] = useState({});
   useEffect(() => setDraft({}), [which, row?.draw_date]);
   const val = (k) => draft[k] ?? row?.[k] ?? '';
-  const commit = (k, cast = Number) =>
-    draft[k] !== undefined && onPatch({ [k]: draft[k] === '' ? null : cast(draft[k]) });
+  // Money fields go through resolveAmount so "1200+450" saves as 1650.
+  // Winner counts and letters keep their own casts and are unaffected.
+  const MONEY = new Set(['jackpot_amount', 'match4_payout', 'match3_payout', 'match5_payout']);
+  const commit = (k, cast = Number) => {
+    if (draft[k] === undefined) return;
+    if (MONEY.has(k)) {
+      const { total, error } = resolveAmount(draft[k]);
+      if (!error) onPatch({ [k]: total });
+      return;
+    }
+    onPatch({ [k]: draft[k] === '' ? null : cast(draft[k]) });
+  };
 
   // Keep a fixed-length array during entry so each box maps to a stable slot.
   // Empty slots stay as '' — we only compact (drop blanks) when saving, so
@@ -654,7 +728,8 @@ function JackpotEntry({ which, row, onPatch, settings, nextNos }) {
                   autoAdvance={() => {
                     // Stop at the last box rather than wrapping round.
                     const inputs = numbersRef.current?.querySelectorAll('input');
-                    inputs?.[i + 1]?.focus();
+                    const next = inputs?.[i + 1];
+                    if (next) { next.focus(); next.select(); }
                   }}
                 />
               ))}

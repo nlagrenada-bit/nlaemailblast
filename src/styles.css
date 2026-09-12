@@ -691,3 +691,10 @@ body[data-tod] .side { backdrop-filter: saturate(1.05); }
   text-decoration: underline; text-underline-offset: 3px; cursor: pointer;
 }
 .finalcheck-actions .btn.anyway:hover { background: #fbdfda; color: #5c1f1a; }
+
+/* Payout field: live total when two figures are added */
+.sumhint { margin-top: 4px; font-family: var(--mono); font-size: 11.5px;
+  color: var(--ink-3); line-height: 1.4; }
+.sumhint strong { color: var(--ok, #1c6b34); font-size: 12.5px; }
+.sumhint.bad { color: #b3261e; }
+input.money.bad { border-color: #e5796d; background: #fdf5f4; }
