@@ -657,3 +657,20 @@ body[data-tod] .side { backdrop-filter: saturate(1.05); }
   background: #fff; border: 1px solid #e0cf95; color: #5c4a00;
   border-radius: 6px; padding: 5px 9px; cursor: pointer; }
 .dayplan-suggest button:hover { background: #fffdf5; border-color: #c9b26a; }
+
+/* Live-update banner: another operator changed this day while you were typing */
+.notice.live-update { align-items: center; }
+.notice.live-update .btn { margin-left: auto; flex-shrink: 0; }
+
+/* Last look before an incomplete blast goes out */
+.finalcheck { margin: 0 20px 4px; padding: 14px 16px; border-radius: 10px;
+  background: #fdece9; border: 1px solid #f3c9c4; }
+.finalcheck h3 { margin: 0 0 6px; font-family: var(--display); font-size: 15px; color: #b3261e; }
+.finalcheck p { margin: 0 0 8px; font-size: 13px; color: #5c1f1a; line-height: 1.5; }
+.finalcheck ul { margin: 0; padding-left: 18px; font-size: 12.5px; color: #5c1f1a; line-height: 1.6; }
+.finalcheck li { margin: 2px 0; }
+.finalcheck .tagx { display: inline-block; margin-right: 6px; padding: 1px 6px; border-radius: 4px;
+  background: #b3261e; color: #fff; font-family: var(--mono); font-size: 9.5px;
+  letter-spacing: .06em; text-transform: uppercase; vertical-align: 1px; }
+.finalcheck-actions { display: flex; gap: 10px; margin-top: 12px; }
+.finalcheck-actions .btn { flex: 1; }

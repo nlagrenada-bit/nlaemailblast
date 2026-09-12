@@ -8,6 +8,7 @@ import { buildEmail } from '../../shared/emailTemplate.js';
 import { ASSET_BASE, EMAIL_ASSET_BASE } from '../lib/supabase.js';
 import { todayLocal } from '../lib/dates.js';
 import * as api from '../lib/api.js';
+import { watchDay, isEditing } from '../lib/liveUpdates.js';
 import Rail from '../components/Rail.jsx';
 import Preview from '../components/Preview.jsx';
 import SendDialog from '../components/SendDialog.jsx';
@@ -41,6 +42,7 @@ export default function ResultsView({ date, settings, groups, canSend }) {
   const [dialog, setDialog] = useState(false);
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState(null);
+  const [staleFrom, setStaleFrom] = useState(null);   // a change arrived while editing
   const [saving, setSaving] = useState(false);
 
   const [nextNos, setNextNos] = useState({});
@@ -49,6 +51,27 @@ export default function ResultsView({ date, settings, groups, canSend }) {
     return api.loadDay(date).then(setState).catch((e) => toast(e.message, 'bad'));
   };
   useEffect(() => { setState(null); reload(); /* eslint-disable-next-line */ }, [date]);
+
+  /* Live updates. Another operator saving a result, or the nightly job
+     publishing one, shows up here without anyone pressing refresh.
+
+     If the person at this screen is mid-entry we do NOT replace what is under
+     their hands — a banner appears instead and they apply it when ready. */
+  useEffect(() => {
+    if (!date) return undefined;
+    const stop = watchDay(date, ({ table }) => {
+      if (isEditing()) {
+        setStaleFrom(table);
+      } else {
+        setStaleFrom(null);
+        reload();
+      }
+    });
+    return stop;
+    /* eslint-disable-next-line */
+  }, [date]);
+
+  const applyUpdates = () => { setStaleFrom(null); reload(); };
 
   const scheduled = useMemo(() => gamesScheduledOn(date, state?.day && {
     daily: state.day.daily_on, cash_pop: state.day.cash_pop_on,
@@ -321,6 +344,16 @@ export default function ResultsView({ date, settings, groups, canSend }) {
           )}
         </div>
 
+        {staleFrom && (
+          <div className="notice info live-update">
+            <div>
+              <strong>Someone else has updated this day.</strong> Your entry is
+              untouched — apply the change when you are ready.
+            </div>
+            <button className="btn sm" onClick={applyUpdates}>Show latest</button>
+          </div>
+        )}
+
         {state.day?.status === 'cancelled' && (
           <div className="notice warn">
             This day is marked cancelled. Nothing will be scheduled until you change the status.
@@ -376,7 +409,7 @@ export default function ResultsView({ date, settings, groups, canSend }) {
       <SendDialog
         open={dialog} onClose={() => setDialog(false)} onConfirm={confirmSend}
         email={email} date={date} label={scope.label} groups={groups}
-        warnings={check.warnings} busy={busy} progress={progress}
+        warnings={check.warnings} blocking={check.blocking} busy={busy} progress={progress}
       />
     </>
   );

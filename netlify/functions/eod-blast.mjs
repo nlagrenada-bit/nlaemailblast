@@ -6,8 +6,10 @@
 
 import { admin } from './lib/supabaseAdmin.mjs';
 import { mailer } from './lib/mailer.mjs';
-import { buildDoc, validateDoc } from '../../shared/buildDoc.js';
+import { buildDoc, validateDoc, missingScheduledDraws } from '../../shared/buildDoc.js';
 import { buildEmail } from '../../shared/emailTemplate.js';
+import { pushResultsEverywhere } from './lib/pushAll.mjs';
+import { markPublished } from './lib/publish.mjs';
 import { longDate, gamesScheduledOn } from '../../shared/config.js';
 
 /** Today in Grenada (AST, UTC-4, no daylight saving). */
@@ -83,25 +85,70 @@ export default async () => {
     subject, html, text_body: text, status: 'draft',
   }).select('id').single();
 
+  // ---------------------------------------------------------------------
+  // Push the day's results to the websites REGARDLESS of the email mode.
+  //
+  // The last draw of the day is the Night Cash Pop at 8:45pm. Previously the
+  // websites only updated when a human sent a blast, so if nobody did, the
+  // night result never reached the public site at all. Publishing results is
+  // a separate obligation from emailing them, so it no longer waits for an
+  // approval that may not come until morning.
+  // ---------------------------------------------------------------------
+  let website = null;
+  try {
+    website = await pushResultsEverywhere({ date, daily, cashPops, lotto, super6 });
+    if (website?.sent > 0) await markPublished(db, date);
+  } catch (e) {
+    website = { errors: [e.message] };
+  }
+
+  // Draws that were never entered at all. validateDoc cannot see these — it
+  // only inspects what was keyed in — yet an unentered late draw is the most
+  // consequential gap there is.
+  const notEntered = missingScheduledDraws({ scheduled, daily, cashPops, lotto, super6 });
+
+  const websiteLine = website?.notConfigured
+    ? ''
+    : `\n\nWebsites: ${website?.sent ?? 0} result(s) published`
+      + `${website?.failed ? `, ${website.failed} failed` : ''}`
+      + `${website?.incomplete?.length ? `.\nNot published: ${website.incomplete.join('; ')}` : '.'}`;
+
   const mode = settings.eod_mode || 'draft';
   if (mode !== 'send') {
     await notifyDesk(`NLA end-of-day blast is ready to send — ${longDate(date)}`,
       `The complete results for ${longDate(date)} are drafted and waiting for approval`
       + `${check.warnings.length ? `.\n\nWorth a look before you send:\n` + check.warnings.map((w) => `  - ${w}`).join('\n') : '.'}`
+      + (notEntered.length
+          ? `\n\n*** NOT ENTERED — these scheduled draws have no result at all: ***\n`
+            + notEntered.map((m) => `  - ${m}`).join('\n')
+            + `\n\nEnter them and resend, or the day's record is incomplete on the`
+            + ` websites and in the archive.`
+          : '')
+      + (check.blocking.length
+          ? `\n\n*** WILL NOT REACH THE WEBSITES: ***\n`
+            + check.blocking.map((m) => `  - ${m}`).join('\n')
+          : '')
+      + websiteLine
       + `\n\nOpen the app, go to History, and review the draft.`);
-    return new Response(JSON.stringify({ staged: blast.id, warnings: check.warnings, date }));
+    return new Response(JSON.stringify({
+      staged: blast.id, warnings: check.warnings, website, date,
+    }));
   }
 
-  // Unattended mode: hand straight to the send path.
+  // Unattended mode: hand straight to the send path. The send endpoint takes
+  // the built message, not a blast id.
   const res = await fetch(`${process.env.URL}/api/send-blast`, {
     method: 'POST',
     headers: {
       'content-type': 'application/json',
       authorization: `Bearer ${process.env.EOD_SERVICE_TOKEN || ''}`,
     },
-    body: JSON.stringify({ blastId: blast.id }),
+    body: JSON.stringify({
+      drawDate: date, subject, html, text,
+      scopeLabel: 'Complete day results', scopeKind: 'eod',
+    }),
   });
-  return new Response(JSON.stringify({ sent: res.ok, blastId: blast.id, date }));
+  return new Response(JSON.stringify({ sent: res.ok, website, date }));
 };
 
 async function notifyDesk(subject, text) {

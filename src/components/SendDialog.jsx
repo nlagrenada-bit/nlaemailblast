@@ -10,7 +10,7 @@ import { countAudience, listSendable } from '../lib/api.js';
  * deliberate: a blast cannot be recalled.
  */
 export default function SendDialog({
-  open, onClose, onConfirm, email, date, label, groups, warnings = [], busy, progress,
+  open, onClose, onConfirm, email, date, label, groups, warnings = [], blocking = [], busy, progress,
 }) {
   const [mode, setMode] = useState('everyone');    // 'everyone' | 'groups' | 'pick'
   const [groupIds, setGroupIds] = useState([]);
@@ -21,6 +21,7 @@ export default function SendDialog({
   const [isResend, setIsResend] = useState(false);
   const [dbOnly, setDbOnly] = useState(false);
   const [typed, setTyped] = useState('');
+  const [finalCheck, setFinalCheck] = useState(null);   // gaps awaiting a last look
   const first = useRef(null);
 
   useEffect(() => {
@@ -75,12 +76,21 @@ export default function SendDialog({
   const emailsForPick = () =>
     (people || []).filter((p) => chosen.has(p.id)).map((p) => p.email);
 
-  const confirm = () => onConfirm({
+  const doSend = () => onConfirm({
     groupIds: mode === 'groups' ? groupIds : [],
     emails: mode === 'pick' ? emailsForPick() : null,
     isResend,
     dbOnly,
   });
+
+  /* Last gate. Typing the confirm word proves intent to send; this proves the
+     operator has seen what is missing. A blast cannot be recalled, so anything
+     incomplete gets one final, explicit look before it goes. */
+  const confirm = () => {
+    const gaps = [...blocking, ...warnings];
+    if (gaps.length === 0) return doSend();
+    setFinalCheck(gaps);
+  };
 
   return (
     <div className="scrim" role="dialog" aria-modal="true" aria-labelledby="send-title"
@@ -175,6 +185,20 @@ export default function SendDialog({
           </label>
           )}
 
+          {blocking.length > 0 && (
+            <div className="notice error" style={{ marginTop: 16, marginBottom: 0 }}>
+              <div>
+                <strong>These will NOT reach the websites</strong>
+                <ul>{blocking.map((w) => <li key={w}>{w}</li>)}</ul>
+                <p style={{ margin: '8px 0 0' }}>
+                  The email will still go out in full. Fix these and use
+                  “Update the website/database only” afterwards, or cancel and
+                  fix them now.
+                </p>
+              </div>
+            </div>
+          )}
+
           {warnings.length > 0 && (
             <div className="notice warn" style={{ marginTop: 16, marginBottom: 0 }}>
               <div>
@@ -206,6 +230,32 @@ export default function SendDialog({
             <div>
               Sending… <strong>{progress.sent} of {progress.total}</strong> so far.
               This continues on the server even if you close the window.
+            </div>
+          </div>
+        )}
+
+        {finalCheck && (
+          <div className="finalcheck">
+            <h3>Send anyway?</h3>
+            <p>
+              {count > 0
+                ? `This goes to ${count} recipient${count === 1 ? '' : 's'} and cannot be recalled.`
+                : 'This updates the websites and cannot be undone from here.'}
+              {' '}The following is incomplete:
+            </p>
+            <ul>
+              {blocking.map((w) => (
+                <li key={w}><span className="tagx">websites</span>{w}</li>
+              ))}
+              {warnings.map((w) => <li key={w}>{w}</li>)}
+            </ul>
+            <div className="finalcheck-actions">
+              <button className="btn ghost" onClick={() => setFinalCheck(null)}>
+                Go back and fix
+              </button>
+              <button className="btn send" onClick={() => { setFinalCheck(null); doSend(); }}>
+                Send with these gaps
+              </button>
             </div>
           </div>
         )}
