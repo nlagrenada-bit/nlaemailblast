@@ -239,8 +239,8 @@ export default function SendDialog({
             <h3>Send anyway?</h3>
             <p>
               {count > 0
-                ? `This goes to ${count} recipient${count === 1 ? '' : 's'} and cannot be recalled.`
-                : 'This updates the websites and cannot be undone from here.'}
+                ? <>This goes to <strong>{count} recipient{count === 1 ? '' : 's'}</strong> and <strong>cannot be recalled</strong>.</>
+                : <>This updates the public websites and <strong>cannot be undone</strong> from here.</>}
               {' '}The following is incomplete:
             </p>
             <ul>
@@ -250,11 +250,11 @@ export default function SendDialog({
               {warnings.map((w) => <li key={w}>{w}</li>)}
             </ul>
             <div className="finalcheck-actions">
-              <button className="btn ghost" onClick={() => setFinalCheck(null)}>
+              <button className="btn fix" onClick={() => setFinalCheck(null)} autoFocus>
                 Go back and fix
               </button>
-              <button className="btn send" onClick={() => { setFinalCheck(null); doSend(); }}>
-                Send with these gaps
+              <button className="btn anyway" onClick={() => { setFinalCheck(null); doSend(); }}>
+                Send anyway
               </button>
             </div>
           </div>
