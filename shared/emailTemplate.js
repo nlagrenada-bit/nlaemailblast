@@ -62,11 +62,31 @@ function statement(text) {
     + `line-height:22px;color:${C.ink};">${text}</p>`;
 }
 
+/**
+ * The payout band.
+ *
+ * Media presenters read these figures on air, often from a phone, at speed.
+ * The amount was previously 15px — the same size as the surrounding prose —
+ * which made the single most-spoken number on the page the hardest to find.
+ * It now sits in its own tinted band at 24px, so it can be picked out at a
+ * glance without hunting.
+ *
+ * Built as a table because Outlook ignores padding and background on <p>.
+ */
 function payout(label, value) {
   if (value === null || value === undefined || value === '') return '';
-  return `<p style="margin:10px 0 0;font-family:${FONT};font-size:15px;`
-    + `line-height:20px;color:${C.ink};">${esc(label)} `
-    + `<strong style="color:${C.navy};">${money(value)}</strong></p>`;
+  return `<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"
+      style="margin:14px 0 0;border-collapse:collapse;">
+    <tr>
+      <td style="background:${C.paper};border-left:4px solid ${C.yellow};border-radius:6px;
+          padding:10px 14px;font-family:${FONT};">
+        <span style="font-size:12px;line-height:16px;letter-spacing:.08em;
+          text-transform:uppercase;color:${C.soft};font-weight:bold;">${esc(label.replace(/:$/, ''))}</span>
+        <div style="font-size:24px;line-height:30px;font-weight:bold;color:${C.navy};
+          margin-top:2px;">${money(value)}</div>
+      </td>
+    </tr>
+  </table>`;
 }
 
 /** One game inside a draw period: logo, draw number, sentence, balls, payout. */
@@ -223,8 +243,11 @@ function jackpotBox(label, winners, amount) {
     <tr><td style="padding:14px 16px;font-family:${FONT};font-size:15px;line-height:22px;color:${C.ink};">
       ${headline}
       ${amount !== null && amount !== undefined && amount !== ''
-      ? `<div style="margin-top:6px;">Current estimated ${esc(label)} Jackpot is now
-           <strong style="color:${C.navy};font-size:17px;">${money(amount)}</strong></div>` : ''}
+      ? `<div style="margin-top:8px;font-size:12px;line-height:16px;letter-spacing:.08em;
+             text-transform:uppercase;color:${C.soft};font-weight:bold;">Current estimated
+             ${esc(label)} Jackpot</div>
+         <div style="font-family:${FONT};font-size:26px;line-height:32px;font-weight:bold;
+             color:${C.navy};margin-top:2px;">${money(amount)}</div>` : ''}
     </td></tr>
   </table>`;
 }

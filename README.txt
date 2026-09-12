@@ -1,84 +1,56 @@
-LIVE UPDATES  +  A LAST LOOK BEFORE SENDING
-============================================
+EMAIL READABILITY FOR ON-AIR READING
+=====================================
 
-1. AUTO-REFRESH WHEN SOMEONE ELSE MAKES A CHANGE
--------------------------------------------------
-Uses Supabase Realtime, not polling. The database pushes each change as it
-happens, so there is no repeated querying and no lag between one operator
-saving and everyone else seeing it.
-
-Watched for the day on screen: daily_results, cash_pop_results, lotto_results,
-super6_results and draw_days.
-
-THE SAFEGUARD THAT MATTERS
-
-A blind auto-refresh would wipe out whatever the person at this screen is
-halfway through typing. So:
-
-  nobody mid-entry   the change is applied straight away, silently
-  mid-entry          a banner appears instead:
-
-      "Someone else has updated this day. Your entry is untouched —
-       apply the change when you are ready."   [ Show latest ]
-
-Typing in the rail's notice box, or having a button focused, does not count as
-mid-entry — only the result fields do. Verified across five cases.
-
-SECURITY: Realtime respects row-level security. The staff_read policy already
-restricts these tables to signed-in staff, so nothing leaks to the public.
-
-YOU MUST RUN THE SQL
-  supabase/10_enable_realtime.sql
-
-Supabase only streams tables added to the supabase_realtime publication.
-Without it the app subscribes fine and simply never receives anything — which
-looks exactly like the feature not working. The script also sets REPLICA
-IDENTITY FULL so deletes carry enough information to be matched to a date.
+Presenters read these figures aloud, often from a phone, at speed. Two numbers
+matter most and both were too small to find quickly.
 
 
-2. A LAST LOOK BEFORE AN INCOMPLETE BLAST GOES OUT
----------------------------------------------------
-Typing SEND proves intent. This proves the operator has SEEN what is missing.
+1. PAYOUT: 15px -> 24px, IN ITS OWN BAND
 
-After typing the confirm word and pressing send, if anything is incomplete a
-red panel appears:
+It was set at 15px — the SAME SIZE as the surrounding prose — and tucked at the
+bottom of each card. The single most-spoken number on the page was the hardest
+one to locate.
 
-      Send anyway?
-      This goes to 60 recipients and cannot be recalled.
-      The following is incomplete:
-        [WEBSITES] MID-MORNING Cash 4 — no draw number, so it will NOT
-                   reach the websites.
-        [WEBSITES] Lotto jackpot is blank — the websites will keep
-                   showing the old figure.
-        MIDDAY: Play Way payout is blank.
-        Lotto free ticket letter is missing.
+It now sits in a tinted band with a gold edge:
 
-      [ Go back and fix ]        [ Send with these gaps ]
+        PAYOUT
+        $48,168.00        <- 24px bold navy
 
-The red WEBSITES tag separates "this will not publish at all" from an ordinary
-cosmetic gap — the two have very different consequences.
-
-A COMPLETE DAY SENDS IMMEDIATELY. No extra click is added when there is nothing
-wrong, so this never becomes a rubber stamp.
+Built as a table, because Outlook ignores padding and background on <p>.
 
 
-FILES
-  src/lib/liveUpdates.js          NEW  realtime watcher + mid-edit guard
-  src/views/ResultsView.jsx       subscribes; shows the banner
-  src/components/SendDialog.jsx   the final check
-  src/styles.css                  styling
-  supabase/10_enable_realtime.sql MUST BE RUN
-  shared/buildDoc.js              severity split (from the previous update)
-  netlify/functions/eod-blast.mjs nightly website push (previous update)
+2. JACKPOT: 17px -> 26px, WITH ITS OWN LABEL
+
+Same problem, and arguably the most-read figure of all:
+
+        CURRENT ESTIMATED LOTTO JACKPOT
+        $148,000.00       <- 26px bold navy
+
+Previously it was an inline <strong> inside a sentence.
+
+
+WHAT WAS ALREADY RIGHT, AND LEFT ALONE
+
+  - Lotto and Super 6 numbers print smallest to largest (3 9 13 29 32)
+  - "Free Ticket Letter: K as in KING" — the spoken word is already there,
+    which is exactly what a presenter needs
+  - Draw numbers sit top-right, out of the reading path but available
+  - The plain-text version is unchanged and still reads cleanly for anyone
+    working from text rather than HTML
+
+NOT CHANGED, DELIBERATELY
+Multi-X appears as its own card rather than inside the parent game. That looks
+redundant on screen, but it mirrors how the draws are announced, so it is house
+style rather than a fault. Say the word if you want them merged.
+
+
+FILE
+  shared/emailTemplate.js
 
 DEPLOY
-  1. Run supabase/10_enable_realtime.sql in the Supabase SQL editor.
-  2. git add -A
-     git commit -m "Live updates between operators; final check before incomplete sends"
-     git push
+  git add shared/emailTemplate.js
+  git commit -m "Enlarge payout and jackpot for on-air readability"
+  git push
 
-TEST
-  Open the same date in two browsers signed in as different staff. Enter a
-  result in one; the other should update within a second without being touched.
-  Then start typing in the second and repeat — the banner should appear rather
-  than the value changing under you.
+The preview in the app uses the same template, so what the operator checks
+before sending is exactly what the presenter reads.
