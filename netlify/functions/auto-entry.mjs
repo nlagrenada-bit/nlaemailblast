@@ -8,7 +8,7 @@
 
 import { requireStaff } from './lib/supabaseAdmin.mjs';
 import { createClient } from '@supabase/supabase-js';
-import { fetchLatestResults } from './lib/playScrape.mjs';
+import { fetchResults } from './lib/resultSource.mjs';
 
 const json = (b, s = 200) =>
   new Response(JSON.stringify(b, null, 2), { status: s, headers: { 'content-type': 'application/json' } });
@@ -32,9 +32,9 @@ export default async (request) => {
   const admin = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY,
     { auth: { persistSession: false } });
 
-  const scraped = await fetchLatestResults();
+  const scraped = await fetchResults();
   if (!scraped.results.length) {
-    return json({ error: 'Could not read any results from play.nla.gd.',
+    return json({ error: `Could not read any results from ${scraped.source || 'the source'}.`,
                   problems: scraped.problems }, 502);
   }
 
@@ -59,7 +59,8 @@ export default async (request) => {
         .order('draw_date', { ascending: false }).limit(1);
 
       items.push(reconcile(base, row?.numbers, row?.free_ticket_letter,
-        null, row?.draw_no, last?.[0]?.draw_no, row?.published_at));
+        null, row?.draw_no, last?.[0]?.draw_no, row?.published_at,
+        null, row?.jackpot_amount));
       continue;
     }
 
@@ -71,7 +72,8 @@ export default async (request) => {
         .order('draw_date', { ascending: false }).order('period', { ascending: false }).limit(1);
 
       items.push(reconcile(base, row?.number != null ? [row.number] : null,
-        null, null, row?.draw_no, last?.[0]?.draw_no, row?.published_at));
+        null, null, row?.draw_no, last?.[0]?.draw_no, row?.published_at,
+        row?.payout));
       continue;
     }
 
@@ -93,15 +95,19 @@ export default async (request) => {
       .select(F[2]).not(F[2], 'is', null)
       .order('draw_date', { ascending: false }).limit(1);
 
+    const PAYOUT_FIELD = {
+      play_way: 'play_way_payout', pick3: 'pick3_payout', cash4: 'cash4_payout',
+    }[r.game];
+
     items.push(reconcile(base, held, null, row?.[F[1]], row?.[F[2]],
-      last?.[0]?.[F[2]], row?.published_at));
+      last?.[0]?.[F[2]], row?.published_at, row?.[PAYOUT_FIELD]));
   }
 
   const counts = items.reduce((a, i) => { a[i.status] = (a[i.status] || 0) + 1; return a; }, {});
 
   return json({
     ok: true,
-    source: 'play.nla.gd',
+    source: scraped.source || 'play.nla.gd',
     fetchedAt: scraped.fetchedAt,
     date: date || null,
     counts,
@@ -118,12 +124,27 @@ export default async (request) => {
  * conflict  differs - MUST be resolved by a person before publishing
  * published already sent; a difference here is a correction, not an entry
  */
-function reconcile(base, heldNumbers, heldLetter, heldMultiplier, heldDrawNo, lastDrawNo, publishedAt) {
-  const suggestedDrawNo = heldDrawNo ?? (lastDrawNo ? Number(lastDrawNo) + 1 : null);
+function reconcile(base, heldNumbers, heldLetter, heldMultiplier, heldDrawNo,
+                   lastDrawNo, publishedAt, heldPayout = null, heldJackpot = null) {
+  // A source that carries the real draw number (the Abrazo feed will) is
+  // trusted over our own last-plus-one guess.
+  const suggestedDrawNo = base.drawNo ?? heldDrawNo
+    ?? (lastDrawNo ? Number(lastDrawNo) + 1 : null);
+
+  // Payouts are published after the numbers and are not on play.nla.gd at all,
+  // so a result can be perfectly correct and still be waiting for one. That is
+  // reported separately from a conflict — it is an outstanding task, not a
+  // disagreement.
+  // If the source supplied a payout, nothing needs entering by hand.
+  const needsPayout = (base.payout ?? heldPayout) === null
+    || (base.payout ?? heldPayout) === undefined;
+  const needsJackpot = (base.game === 'lotto' || base.game === 'super6')
+    && (heldJackpot === null || heldJackpot === undefined);
 
   if (!heldNumbers) {
     return { ...base, status: 'new', heldNumbers: null,
-      suggestedDrawNo, lastDrawNo: lastDrawNo ?? null, publishedAt: null };
+      suggestedDrawNo, lastDrawNo: lastDrawNo ?? null, publishedAt: null,
+      needsPayout: true, needsJackpot };
   }
 
   const diffs = [];
@@ -141,8 +162,10 @@ function reconcile(base, heldNumbers, heldLetter, heldMultiplier, heldDrawNo, la
     ...base,
     status: diffs.length ? 'conflict' : (publishedAt ? 'published' : 'match'),
     heldNumbers, heldMultiplier: heldMultiplier ?? null, heldDrawNo: heldDrawNo ?? null,
+    heldPayout: heldPayout ?? null, heldJackpot: heldJackpot ?? null,
     suggestedDrawNo, lastDrawNo: lastDrawNo ?? null,
     publishedAt: publishedAt ?? null,
+    needsPayout, needsJackpot,
     diffs,
   };
 }

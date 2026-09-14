@@ -387,3 +387,15 @@ export async function acceptScraped(payload) {
   if (!res.ok) throw new Error(body.error || 'Could not save that result.');
   return body;
 }
+
+/** Add or correct a payout (or jackpot) on a result that already exists. */
+export async function setPayout(payload) {
+  const res = await fetch('/api/set-payout', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', ...(await authHeader()) },
+    body: JSON.stringify(payload),
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(body.error || 'Could not save that payout.');
+  return body;
+}

@@ -129,6 +129,31 @@ export default function AutoEntryView({ date, onEntered }) {
     } finally { setBusy(null); }
   };
 
+  /* Add a payout to a result that is already in the app. Payouts land after the
+     numbers and are not on play.nla.gd at all, so this is a normal part of the
+     day rather than a correction. */
+  const savePayout = async (item) => {
+    const k = key(item);
+    const value = payouts[k];
+    if (value === undefined || value === '') {
+      toast('Enter an amount first.', 'bad'); return;
+    }
+    setBusy(k);
+    try {
+      const isJackpot = item.game === 'lotto' || item.game === 'super6';
+      await api.setPayout({
+        game: item.game, drawDate: item.drawDate, period: item.period,
+        payout: isJackpot ? null : value,
+        jackpot: isJackpot ? value : null,
+      });
+      toast(`${item.label} ${isJackpot ? 'jackpot' : 'payout'} saved.`, 'good');
+      setPayouts((x) => ({ ...x, [k]: '' }));
+      await load();
+    } catch (e) {
+      toast(e.message, 'bad');
+    } finally { setBusy(null); }
+  };
+
   const items = data?.items || [];
   const actionable = items.filter((i) => i.status === 'new');
   const conflicts  = items.filter((i) => i.status === 'conflict');
@@ -186,11 +211,25 @@ export default function AutoEntryView({ date, onEntered }) {
               </button>
             )}
 
-            <a className="btn sm" href={`?tab=results&date=${date}`}
-               onClick={(e) => { e.preventDefault();
+            {/* Navigation only. What makes the results appear on the Results
+                page is ACCEPTING them, which writes them to the database — not
+                this button. So it says so, and warns when there is still
+                unaccepted work rather than sending someone to an empty page. */}
+            <a className={`btn sm goresults${actionable.length ? ' warn' : ''}`}
+               href={`?tab=results&date=${date}`}
+               title={actionable.length
+                 ? `${actionable.length} result(s) have not been accepted yet and will NOT appear on the Results page.`
+                 : 'Open the Results page for this date to add payouts, check, and send.'}
+               onClick={(e) => {
+                 e.preventDefault();
+                 if (actionable.length && !window.confirm(
+                   `${actionable.length} result${actionable.length === 1 ? ' has' : 's have'} not been accepted yet.\n\n`
+                   + `Only accepted results are saved and will show on the Results page. `
+                   + `Go there anyway?`)) return;
                  window.history.pushState({}, '', `?tab=results&date=${date}`);
-                 window.dispatchEvent(new PopStateEvent('popstate')); }}>
-              Review and send →
+                 window.dispatchEvent(new PopStateEvent('popstate'));
+               }}>
+              Open Results to add payouts and send →
             </a>
           </div>
 
@@ -270,6 +309,34 @@ export default function AutoEntryView({ date, onEntered }) {
                     </div>
                   )}
 
+                  {/* Already in the app, but still waiting on its money figure. */}
+                  {i.status !== 'new' && i.status !== 'other_day'
+                    && (i.needsPayout || i.needsJackpot) && (
+                    <div className="scrape-actions payout-only">
+                      <label>
+                        {i.needsJackpot ? 'Jackpot' : 'Payout'}
+                        <input type="text" inputMode="decimal"
+                          placeholder={i.needsJackpot ? 'not yet set' : '0.00  or  1200+450'}
+                          value={payouts[k] ?? ''}
+                          onChange={(e) => setPayouts((x) => ({ ...x, [k]: e.target.value }))} />
+                      </label>
+                      <button className="btn sm" disabled={busy === k}
+                        onClick={() => savePayout(i)}>
+                        {busy === k ? 'Saving…' : `Save ${i.needsJackpot ? 'jackpot' : 'payout'}`}
+                      </button>
+                      <span className="hint">
+                        not on play.nla.gd — enter it here or on the results page
+                      </span>
+                    </div>
+                  )}
+
+                  {i.status !== 'new' && i.status !== 'other_day'
+                    && !i.needsPayout && !i.needsJackpot && i.heldPayout != null && (
+                    <p className="muted sm">
+                      Payout ${Number(i.heldPayout).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                    </p>
+                  )}
+
                   {i.status === 'other_day' && <p className="muted sm">{i.note}</p>}
                 </div>
               );
@@ -278,9 +345,11 @@ export default function AutoEntryView({ date, onEntered }) {
 
           <div className="notice warn" style={{ marginTop: 18 }}>
             <div>
-              <strong>Accepting does not publish.</strong> Accepted results are saved
-              as normal entries. Open the results page, add anything missing, and
-              send from there as usual.
+              <strong>Accepting saves; it does not publish.</strong> Pressing Accept
+              writes the result into the app exactly as manual entry would, so it
+              is already filled in when you open the Results page — that page reads
+              the same records. Nothing is emailed or sent to the websites until you
+              send it from there.
             </div>
           </div>
         </>

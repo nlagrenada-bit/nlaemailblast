@@ -763,3 +763,8 @@ input.money.bad { border-color: #e5796d; background: #fdf5f4; }
 .auto-summary .btn { margin-left: 0; }
 .auto-summary a.btn { text-decoration: none; }
 .auto-summary > a.btn { margin-left: auto; }
+.scrape-actions.payout-only { border-top: 1px dashed var(--line); padding-top: 11px; margin-top: 11px; }
+.scrape-actions.payout-only .hint { align-self: center; }
+.btn.goresults { font-weight: 600; }
+.btn.goresults.warn { border-color: #e0cf95; background: #fff8e1; color: #6b5300; }
+.btn.goresults.warn:hover { background: #fff3cc; }
