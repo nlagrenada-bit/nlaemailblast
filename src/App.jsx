@@ -4,6 +4,7 @@ import { todayLocal, shiftDate, applyTimeOfDay } from './lib/dates.js';
 import * as api from './lib/api.js';
 import { ToastHost } from './components/Toast.jsx';
 import ResultsView from './views/ResultsView.jsx';
+import AutoEntryView from './views/AutoEntryView.jsx';
 import RecipientsView from './views/RecipientsView.jsx';
 import HistoryView from './views/HistoryView.jsx';
 import SettingsView from './views/SettingsView.jsx';
@@ -13,6 +14,7 @@ import ResetPassword from './views/ResetPassword.jsx';
 
 const TABS = [
   ['results', 'Results'],
+  ['auto', 'Assisted entry'],
   ['archive', 'Archive'],
   ['recipients', 'Recipients'],
   ['history', 'History'],
@@ -97,7 +99,7 @@ export default function App() {
 
           <div className="spacer" />
 
-          {tab === 'results' && (
+          {(tab === 'results' || tab === 'auto') && (
             <div className="datepick">
               <button onClick={() => setDate((d) => shiftDate(d, -1))} aria-label="Previous day">‹</button>
               <input type="date" value={date} onChange={(e) => setDate(e.target.value)} aria-label="Draw date" />
@@ -127,6 +129,10 @@ export default function App() {
           <div className="shell">
             {tab === 'results' && (
               <ResultsView date={date} settings={settings} groups={groups} canSend={canSend} />
+            )}
+            {tab === 'auto' && (
+              <AutoEntryView date={date} toast={toast}
+                onEntered={() => setTab('auto')} />
             )}
             {tab === 'recipients' && (
               <RecipientsView groups={groups} onGroupsChanged={() => api.listGroups().then(setGroups)} />

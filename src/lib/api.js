@@ -359,3 +359,31 @@ export async function clearUnpublishedDay(date) {
   }
   return removed;
 }
+
+// ------------------------------------------------- assisted entry (trial)
+
+const authHeader = async () => {
+  const { data: { session } } = await supabase.auth.getSession();
+  return { authorization: `Bearer ${session?.access_token ?? ''}` };
+};
+
+/** Read play.nla.gd and reconcile it against what the app holds. */
+export async function autoEntry(date) {
+  const res = await fetch(`/api/auto-entry?date=${encodeURIComponent(date)}`,
+    { headers: await authHeader() });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(body.error || 'Could not read play.nla.gd.');
+  return body;
+}
+
+/** Save one reviewed result. Writes exactly what manual entry writes. */
+export async function acceptScraped(payload) {
+  const res = await fetch('/api/accept-scraped', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', ...(await authHeader()) },
+    body: JSON.stringify(payload),
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(body.error || 'Could not save that result.');
+  return body;
+}
