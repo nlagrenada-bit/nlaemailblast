@@ -40,6 +40,20 @@ const POP_BY_TIME = {
 const MONTHS = { jan:1, feb:2, mar:3, apr:4, may:5, jun:6,
                  jul:7, aug:8, sep:9, oct:10, nov:11, dec:12 };
 
+// What each game's result can actually be. The page has no delimiter after the
+// last block, so a greedy match runs on into the footer — "473 440 7050" is the
+// contact number and "2026" the copyright year. Taking only the expected count,
+// and rejecting anything out of range, makes the parse immune to whatever
+// follows on the page.
+const SHAPE = {
+  play_way: { count: 1, min: 1,  max: 36 },
+  pick3:    { count: 3, min: 0,  max: 9  },
+  cash4:    { count: 4, min: 0,  max: 9  },
+  cash_pop: { count: 1, min: 1,  max: 15 },
+  lotto:    { count: 5, min: 1,  max: 34 },
+  super6:   { count: 6, min: 1,  max: 28 },
+};
+
 /** '07:45 PM' -> '19:45' */
 export function to24h(time) {
   const m = /^(\d{1,2}):(\d{2})\s*(AM|PM)$/i.exec(String(time).trim());
@@ -107,7 +121,7 @@ export function parsePlayPage(html, today = new Date()) {
     const body = chunk.slice(close + 1);
 
     // "Latest Results Sat 12 Sep 07:45 PM 33 MX: FP"
-    const m = /Latest Results\s+([A-Za-z]{3}\s+\d{1,2}\s+[A-Za-z]{3})\s+(\d{1,2}:\d{2}\s*(?:AM|PM))\s+([^⟦]*?)(?=Next Draw|Latest Results|Play\b|$)/i
+    const m = /Latest Results\s+([A-Za-z]{3}\s+\d{1,2}\s+[A-Za-z]{3})\s+(\d{1,2}:\d{2}\s*(?:AM|PM))\s+([^⟦]*?)(?=Next Draw|Latest Results|Play\b|Buy Tickets|Call us|Privacy|©|$)/i
       .exec(body);
     if (!m) continue;                       // the block may be a nav duplicate
 
@@ -132,10 +146,26 @@ export function parsePlayPage(html, today = new Date()) {
       ? letterMatch[1] : null;
 
     const numberPart = letter ? withoutMx.replace(/\b[A-O]\b\s*$/, '') : withoutMx;
-    const numbers = (numberPart.match(/\d+/g) || []).map(Number);
+    const shape = SHAPE[game];
+    const found = (numberPart.match(/\d+/g) || []).map(Number);
 
-    if (!numbers.length) {
-      problems.push(`${game}: no winning numbers found.`);
+    // Keep only as many as this game has, then check they are in range. Both
+    // guards matter: the count stops footer text being read as results, and the
+    // range catches a mis-parse that happens to have the right length.
+    const numbers = found.slice(0, shape.count);
+
+    if (numbers.length < shape.count) {
+      problems.push(
+        `${game}: expected ${shape.count} number${shape.count === 1 ? '' : 's'} `
+        + `but read ${numbers.length}.`);
+      continue;
+    }
+
+    const outOfRange = numbers.filter((n) => n < shape.min || n > shape.max);
+    if (outOfRange.length) {
+      problems.push(
+        `${game}: ${outOfRange.join(', ')} outside the valid range `
+        + `${shape.min}-${shape.max}. The page may have changed.`);
       continue;
     }
 
