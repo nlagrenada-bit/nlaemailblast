@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import * as api from '../lib/api.js';
+import { useToast } from '../components/Toast.jsx';
 import { longDate, MULTIPLIERS } from '../../shared/config.js';
 
 /**
@@ -26,7 +27,10 @@ const STATUS = {
   other_day: { label: 'Other day', cls: 'st-mute',  help: 'Belongs to a different date' },
 };
 
-export default function AutoEntryView({ date, toast, onEntered }) {
+export default function AutoEntryView({ date, onEntered }) {
+  // Use the app's existing toast host. Referencing a `toast` prop that App
+  // never passed was throwing on render and blanking the page.
+  const toast = useToast();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(null);
@@ -79,7 +83,7 @@ export default function AutoEntryView({ date, toast, onEntered }) {
   const conflicts  = items.filter((i) => i.status === 'conflict');
 
   return (
-    <div className="auto-entry">
+    <div className="main auto-entry" style={{ maxWidth: 900 }}>
       <div className="pagehead">
         <h1>Assisted entry</h1>
         <span className="sub">{longDate(date)}</span>
@@ -202,6 +206,7 @@ export default function AutoEntryView({ date, toast, onEntered }) {
           </div>
         </>
       )}
+
     </div>
   );
 }

@@ -25,8 +25,62 @@ export default function App() {
   const [session, setSession] = useState(undefined);   // undefined = still checking
   const [recovering, setRecovering] = useState(false);   // arrived via a reset link
   const [staff, setStaff] = useState(null);
-  const [tab, setTab] = useState('results');
-  const [date, setDate] = useState(todayLocal());
+  /* Tab and date live in the URL, so the browser's Back button behaves the way
+     it does on any normal site: it returns to the previous tab or the previous
+     day, and a link or refresh lands where you were rather than resetting to
+     today's results. */
+  const isRealDate = (d) => {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(d || '')) return false;
+    const [y, m, day] = d.split('-').map(Number);
+    const dt = new Date(Date.UTC(y, m - 1, day));
+    return dt.getUTCFullYear() === y && dt.getUTCMonth() === m - 1 && dt.getUTCDate() === day;
+  };
+
+  const readUrl = () => {
+    const p = new URLSearchParams(window.location.search);
+    const t = p.get('tab');
+    const d = p.get('date');
+    return {
+      tab: TABS.some(([id]) => id === t) ? t : 'results',
+      // The shape alone is not enough: 2026-13-99 matches it but is not a date.
+      date: isRealDate(d) ? d : todayLocal(),
+    };
+  };
+
+  const initial = readUrl();
+  const [tab, setTabState] = useState(initial.tab);
+  const [date, setDateState] = useState(initial.date);
+
+  /* Push a new entry so Back steps through the history. replace=true is used
+     when the change is not a navigation the user would expect to undo. */
+  const navigate = (next, replace = false) => {
+    const t = next.tab ?? tab;
+    const d = next.date ?? date;
+    const url = `${window.location.pathname}?tab=${encodeURIComponent(t)}&date=${encodeURIComponent(d)}`;
+    if (replace) window.history.replaceState({ t, d }, '', url);
+    else window.history.pushState({ t, d }, '', url);
+    if (next.tab !== undefined) setTabState(t);
+    if (next.date !== undefined) setDateState(d);
+  };
+
+  const setTab = (t) => navigate({ tab: typeof t === 'function' ? t(tab) : t });
+  const setDate = (d) => navigate({ date: typeof d === 'function' ? d(date) : d });
+
+  // Back and forward: adopt whatever the URL now says.
+  useEffect(() => {
+    const onPop = () => {
+      const u = readUrl();
+      setTabState(u.tab);
+      setDateState(u.date);
+    };
+    window.addEventListener('popstate', onPop);
+    // Make sure the first entry carries the state, so Back from the second
+    // view has somewhere to return to.
+    window.history.replaceState({ t: initial.tab, d: initial.date }, '',
+      `${window.location.pathname}?tab=${initial.tab}&date=${initial.date}`);
+    return () => window.removeEventListener('popstate', onPop);
+    /* eslint-disable-next-line */
+  }, []);
   const [settings, setSettings] = useState({});
   const [groups, setGroups] = useState([]);
 
@@ -131,8 +185,7 @@ export default function App() {
               <ResultsView date={date} settings={settings} groups={groups} canSend={canSend} />
             )}
             {tab === 'auto' && (
-              <AutoEntryView date={date} toast={toast}
-                onEntered={() => setTab('auto')} />
+              <AutoEntryView date={date} />
             )}
             {tab === 'recipients' && (
               <RecipientsView groups={groups} onGroupsChanged={() => api.listGroups().then(setGroups)} />
