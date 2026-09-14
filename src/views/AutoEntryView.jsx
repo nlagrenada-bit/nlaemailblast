@@ -36,12 +36,15 @@ export default function AutoEntryView({ date, onEntered }) {
   const [busy, setBusy] = useState(null);
   const [payouts, setPayouts] = useState({});
   const [drawNos, setDrawNos] = useState({});
+  const [live, setLive] = useState(false);
+  const [lastRead, setLastRead] = useState(null);
 
   const load = async () => {
     setLoading(true);
     try {
       const r = await api.autoEntry(date);
       setData(r);
+      setLastRead(new Date());
       // Seed the editable fields from what the reconciliation suggested.
       const d = {};
       for (const i of r.items || []) {
@@ -54,7 +57,21 @@ export default function AutoEntryView({ date, onEntered }) {
     } finally { setLoading(false); }
   };
 
-  useEffect(() => { setData(null); setPayouts({}); /* eslint-disable-next-line */ }, [date]);
+  useEffect(() => { setData(null); setPayouts({}); setLive(false); /* eslint-disable-next-line */ }, [date]);
+
+  /* Live mode: re-read every 90 seconds so a draw appears here shortly after it
+     is published, without anyone pressing the button.
+
+     It only ever READS. Nothing is accepted, saved or sent automatically — the
+     operator still decides, which is the whole point of this being assisted
+     rather than automatic. */
+  useEffect(() => {
+    if (!live) return undefined;
+    load();
+    const t = setInterval(load, 90_000);
+    return () => clearInterval(t);
+    /* eslint-disable-next-line */
+  }, [live, date]);
 
   const key = (i) => `${i.game}:${i.period || 'x'}:${i.drawDate}`;
 
@@ -78,6 +95,40 @@ export default function AutoEntryView({ date, onEntered }) {
     } finally { setBusy(null); }
   };
 
+  /* Accept every NEW row in one go. Refused outright while a conflict exists
+     for the day: if the app and the site disagree about one draw, the others
+     are not trustworthy enough to wave through in bulk. */
+  const acceptAll = async () => {
+    if (conflicts.length) {
+      toast('Resolve the conflict first. Nothing is accepted in bulk while the app and the site disagree.', 'bad');
+      return;
+    }
+    const missing = actionable.filter((i) => !Number(drawNos[key(i)]));
+    if (missing.length) {
+      toast(`${missing.map((m) => m.label).join(', ')} still needs a draw number.`, 'bad');
+      return;
+    }
+    setBusy('all');
+    let done = 0;
+    try {
+      for (const item of actionable) {
+        const k = key(item);
+        await api.acceptScraped({
+          game: item.game, drawDate: item.drawDate, period: item.period,
+          numbers: item.numbers, multiplier: item.multiplier, letter: item.letter,
+          drawNo: Number(drawNos[k]), payout: payouts[k] ?? null,
+          jackpot: item.jackpot ?? null,
+        });
+        done += 1;
+      }
+      toast(`${done} result${done === 1 ? '' : 's'} accepted. Review and send from the Results page.`, 'good');
+      await load();
+    } catch (e) {
+      toast(`Stopped after ${done}: ${e.message}`, 'bad');
+      await load();
+    } finally { setBusy(null); }
+  };
+
   const items = data?.items || [];
   const actionable = items.filter((i) => i.status === 'new');
   const conflicts  = items.filter((i) => i.status === 'conflict');
@@ -87,10 +138,18 @@ export default function AutoEntryView({ date, onEntered }) {
       <div className="pagehead">
         <h1>Assisted entry</h1>
         <span className="sub">{longDate(date)}</span>
-        <button className="btn primary" style={{ marginLeft: 'auto' }}
-          onClick={load} disabled={loading}>
-          {loading ? 'Reading play.nla.gd…' : 'Read latest from play.nla.gd'}
-        </button>
+        <div className="auto-controls">
+          <label className={`livetoggle${live ? ' on' : ''}`}
+            title="Re-read play.nla.gd every 90 seconds. Reads only — nothing is accepted or sent automatically.">
+            <input type="checkbox" checked={live}
+              onChange={(e) => setLive(e.target.checked)} />
+            <span className="dot" />
+            Live
+          </label>
+          <button className="btn primary" onClick={load} disabled={loading}>
+            {loading ? 'Reading…' : 'Read now'}
+          </button>
+        </div>
       </div>
 
       <div className="notice info">
@@ -109,11 +168,31 @@ export default function AutoEntryView({ date, onEntered }) {
 
       {data && (
         <>
-          <p className="muted" style={{ marginTop: 4 }}>
-            Read at {new Date(data.fetchedAt).toLocaleTimeString()}.
-            {' '}{actionable.length} new, {conflicts.length} conflict
-            {conflicts.length === 1 ? '' : 's'}.
-          </p>
+          <div className="auto-summary">
+            <span className="muted">
+              Read at {lastRead ? lastRead.toLocaleTimeString() : new Date(data.fetchedAt).toLocaleTimeString()}
+              {live && ' · re-reading every 90 seconds'}
+              {' · '}{actionable.length} new, {conflicts.length} conflict
+              {conflicts.length === 1 ? '' : 's'}
+            </span>
+
+            {actionable.length > 0 && (
+              <button className="btn primary sm" onClick={acceptAll}
+                disabled={busy === 'all' || conflicts.length > 0}
+                title={conflicts.length
+                  ? 'Resolve the conflict first'
+                  : `Accept all ${actionable.length} new result(s)`}>
+                {busy === 'all' ? 'Accepting…' : `Accept all ${actionable.length}`}
+              </button>
+            )}
+
+            <a className="btn sm" href={`?tab=results&date=${date}`}
+               onClick={(e) => { e.preventDefault();
+                 window.history.pushState({}, '', `?tab=results&date=${date}`);
+                 window.dispatchEvent(new PopStateEvent('popstate')); }}>
+              Review and send →
+            </a>
+          </div>
 
           {conflicts.length > 0 && (
             <div className="notice error">
