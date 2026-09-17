@@ -147,8 +147,21 @@ export function buildApiPayloads({ date, daily = [], cashPops = [], lotto = null
     out.push({ game, drawNumber: row.draw_no, body });
   }
 
+  /* Send in draw-number order, ascending, within each game.
+     The portal validates that every draw number is exactly the last plus one,
+     so a draw that arrives early is rejected with 422 — and the retry only
+     works once the earlier draws have gone in. That is why a day sometimes had
+     to be sent twice: whatever Postgres happened to return first decided
+     whether it succeeded. Sorting here removes the dependency on row order. */
+  out.sort((a, b) =>
+    (GAME_ORDER.indexOf(a.game) - GAME_ORDER.indexOf(b.game))
+    || (Number(a.drawNumber) - Number(b.drawNumber)));
+
   return out;
 }
+
+// Games are sent in a fixed order too, so a run reads the same way every time.
+const GAME_ORDER = ['play_way', 'pick3', 'cash4', 'cash_pop', 'lotto', 'super6'];
 
 function headers(idempotencyKey) {
   const h = {
@@ -170,8 +183,8 @@ function headers(idempotencyKey) {
  * whole day's push only asks once per game.
  */
 const nextCache = new Map();
-async function expectedNext(game) {
-  if (nextCache.has(game)) return nextCache.get(game);
+async function expectedNext(game, fresh = false) {
+  if (!fresh && nextCache.has(game)) return nextCache.get(game);
   const path = GAME_PATH[game] || game;
   let value = null;
   try {
@@ -235,6 +248,9 @@ async function sendOne({ game, drawNumber, body }, { validate = false } = {}) {
 
       if (res.ok) {
         const replay = res.headers.get('x-idempotency-replay') === 'true';
+        // Storing this draw moves the portal on, so the cached expectation is
+        // now stale for the game's next draw in this same run.
+        nextCache.set(game, Number(drawNumber) + 1);
         return { ok: true, game, drawNumber, action: replay ? 'replayed' : 'created' };
       }
 
@@ -250,6 +266,17 @@ async function sendOne({ game, drawNumber, body }, { validate = false } = {}) {
       }
 
       const detail = await res.text().catch(() => '');
+      // A sequence rejection means the portal is behind on this game, usually
+      // because an earlier draw was never sent. Say so, rather than leaving an
+      // opaque 422 that looks like a transient failure.
+      if (res.status === 422 && /sequence|draw_number/i.test(detail)) {
+        const expecting = await expectedNext(game, true);
+        return {
+          ok: false, game, drawNumber, status: 422,
+          error: `The portal is expecting draw ${expecting ?? '?'} for ${game}, `
+            + `not ${drawNumber}. An earlier draw has not reached it — send that first.`,
+        };
+      }
       return {
         ok: false, game, drawNumber, status: res.status,
         error: summarise(res.status, detail),

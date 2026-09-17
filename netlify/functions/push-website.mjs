@@ -133,7 +133,8 @@ export default async (request) => {
 
   const [daily, cashPops, lotto, super6] = await Promise.all([
     admin.from('daily_results').select('*').eq('draw_date', drawDate).then((r) => r.data || []),
-    admin.from('cash_pop_results').select('*').eq('draw_date', drawDate).then((r) => r.data || []),
+    admin.from('cash_pop_results').select('*').eq('draw_date', drawDate)
+      .order('draw_no', { ascending: true }).then((r) => r.data || []),
     admin.from('lotto_results').select('*').eq('draw_date', drawDate).maybeSingle().then((r) => r.data),
     admin.from('super6_results').select('*').eq('draw_date', drawDate).maybeSingle().then((r) => r.data),
   ]);
