@@ -11,8 +11,12 @@ export async function loadDay(date) {
     supabase.from('cash_pop_results').select('*').eq('draw_date', date).then(unwrap),
     supabase.from('lotto_results').select('*').eq('draw_date', date).maybeSingle().then(unwrap),
     supabase.from('super6_results').select('*').eq('draw_date', date).maybeSingle().then(unwrap),
-    supabase.from('blasts').select('id,kind,label,status,sent_at,recipient_count')
-      .eq('draw_date', date).order('created_at', { ascending: false }).then(unwrap),
+    // blast_runs, not the legacy blasts table: the current send path writes
+    // here, and it carries what was actually done — the scope, whether it was a
+    // resend, and whether it was a website-only update.
+    supabase.from('blast_runs')
+      .select('id,scope_kind,scope_label,is_resend,status,total_recipients,sent_count,started_at')
+      .eq('draw_date', date).order('started_at', { ascending: false }).then(unwrap),
   ]);
   return { day, daily: daily || [], cashPops: cashPops || [], lotto, super6, blasts: blasts || [] };
 }

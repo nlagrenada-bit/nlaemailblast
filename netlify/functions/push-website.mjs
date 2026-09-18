@@ -182,6 +182,25 @@ export default async (request) => {
     }, 422);
   }
 
+  /* Record the push so the rail can show "Updated".
+     A website-only push leaves no trace otherwise, so a draw that had been
+     pushed but not emailed looked identical to one nobody had touched. */
+  try {
+    await admin.from('blast_runs').insert({
+      draw_date: drawDate,
+      triggered_by: auth.staff.id,
+      status: 'complete',
+      total_recipients: 0,
+      sent_count: 0,
+      failed_count: website.failed || 0,
+      scope_kind: 'website_only',
+      scope_label: 'Website update',
+      subject: `Website update — ${drawDate}`,
+      html: '',
+      finished_at: new Date().toISOString(),
+    });
+  } catch { /* logging must never fail the push itself */ }
+
   return json({
     ok: true,
     website,

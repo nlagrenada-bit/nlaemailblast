@@ -768,3 +768,15 @@ input.money.bad { border-color: #e5796d; background: #fdf5f4; }
 .btn.goresults { font-weight: 600; }
 .btn.goresults.warn { border-color: #e0cf95; background: #fff8e1; color: #6b5300; }
 .btn.goresults.warn:hover { background: #fff3cc; }
+
+/* Draw number: locked until the suggestion is accepted */
+.drawno input.money.locked { background: var(--mist); color: var(--ink-2);
+  border-style: dashed; cursor: default; }
+.drawno-note { font-family: var(--mono); font-size: 11.5px; color: var(--ink-3);
+  align-self: center; }
+
+/* Draw status tags: what was done, and what is ready to do */
+.tag.resent { background: #fff1e6; color: #a34700; border: 1px solid #f0c9a8; }
+.tag.updated { background: #e8f1fb; color: #1a4d80; border: 1px solid #bcd6ef; }
+.tag.partial { background: #fff8e1; color: #8a6d00; border: 1px solid #f0dca0; }
+.stop-meta .tag + .tag { margin-left: 4px; }

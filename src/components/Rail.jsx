@@ -18,6 +18,7 @@ export default function Rail({
         key: `pop:${p.code}`, kind: 'pop', code: p.code,
         name: p.label, time: p.time, game: 'Cash Pop',
         entered: results.cashPops.some((r) => r.period === p.code && r.number != null),
+        complete: results.cashPops.some((r) => r.period === p.code && r.number != null),
       });
     }
   }
@@ -28,6 +29,9 @@ export default function Rail({
         key: `daily:${p.code}`, kind: 'daily', code: p.code,
         name: p.label, time: p.time, game: 'Play Way · Pick 3 · Cash 4',
         entered: !!(row?.play_way_number || row?.pick3_digits?.length || row?.cash4_digits?.length),
+        // "Ready" means the whole slot is done — all three games, not just one.
+        complete: !!(row?.play_way_number != null && row?.play_way_number !== undefined
+          && row?.pick3_digits?.length === 3 && row?.cash4_digits?.length === 4),
       });
     }
   }
@@ -36,6 +40,7 @@ export default function Rail({
       key: 'lotto', kind: 'lotto', code: 'lotto', name: 'Lotto Draw',
       time: '19:45', game: '5 from 34 · free ticket letter',
       entered: !!results.lotto,
+      complete: results.lotto?.numbers?.length === 5 && !!results.lotto?.free_ticket_letter,
     });
   }
   if (scheduled.super6) {
@@ -43,6 +48,7 @@ export default function Rail({
       key: 'super6', kind: 'super6', code: 'super6', name: 'Super 6 Draw',
       time: '19:45', game: '6 from 28 · free ticket letter',
       entered: !!results.super6,
+      complete: results.super6?.numbers?.length === 6 && !!results.super6?.free_ticket_letter,
     });
   }
 
@@ -58,7 +64,31 @@ export default function Rail({
     ? stops.find((s) => !s.entered && toMinutes(s.time) <= now + 15)?.key
     : null;
 
-  const sentKinds = new Set(results.blasts.filter((b) => b.status === 'sent').map((b) => b.label));
+  /* What has actually been done for each slot.
+     A slot can have had more than one thing happen to it — sent, then corrected
+     and resent, then pushed to the websites — so this collects every action
+     rather than reducing it to a single flag. */
+  const runs = (results.blasts || []).filter((b) => b.status === 'complete');
+
+  const actionsFor = (label) => {
+    const set = new Set();
+    for (const r of runs) {
+      // A website-only push covers the whole day, not one slot.
+      if (r.scope_kind === 'website_only') { set.add('updated'); continue; }
+      const covers = r.scope_label === label || r.scope_kind === 'eod';
+      if (!covers) continue;
+      if (r.is_resend) set.add('resent');
+      else if (Number(r.total_recipients) > 0) set.add('sent');
+      else set.add('updated');
+    }
+    return set;
+  };
+
+  // Keeps the old dot behaviour: a filled circle once anything has gone out.
+  const wasSent = (label) => {
+    const a = actionsFor(label);
+    return a.has('sent') || a.has('resent');
+  };
 
   return (
     <aside className="rail">
@@ -97,7 +127,8 @@ export default function Rail({
           </p>
         )}
         {stops.map((s) => {
-          const sent = sentKinds.has(s.name);
+          const acts = actionsFor(s.name);
+          const sent = wasSent(s.name);
           return (
             <button
               key={s.key}
@@ -112,8 +143,20 @@ export default function Rail({
                 <span className="stop-name">{s.name}</span>
                 <span className="stop-meta">
                   {to12h(s.time)}
-                  {sent ? <span className="tag sent">Sent</span>
-                    : s.entered ? <span className="tag ready">Ready</span> : null}
+                  {/* What was DONE takes precedence over what is ready to do.
+                      More than one can apply: sent, then corrected and resent,
+                      then pushed to the websites. */}
+                  {acts.size > 0 ? (
+                    <>
+                      {acts.has('sent')    && <span className="tag sent">Sent</span>}
+                      {acts.has('resent')  && <span className="tag resent">Resent</span>}
+                      {acts.has('updated') && <span className="tag updated">Updated</span>}
+                    </>
+                  ) : s.complete ? (
+                    <span className="tag ready">Ready</span>
+                  ) : s.entered ? (
+                    <span className="tag partial">Partial</span>
+                  ) : null}
                   {dueKey === s.key && !s.entered ? <span className="tag">Due now</span> : null}
                 </span>
               </span>
@@ -132,12 +175,21 @@ export default function Rail({
             aria-current={selected === 'eod'}
             onClick={() => onSelect('eod')}
           >
-            <span className={`dot${sentKinds.has('Complete day results') ? ' sent' : ''}`}>∑</span>
+            <span className={`dot${wasSent('Complete day results') ? ' sent' : ''}`}>∑</span>
             <span className="stop-body">
               <span className="stop-name">Complete day results</span>
               <span className="stop-meta">
                 21:00
-                {sentKinds.has('Complete day results') && <span className="tag sent">Sent</span>}
+                {(() => {
+                  const a = actionsFor('Complete day results');
+                  return (
+                    <>
+                      {a.has('sent')    && <span className="tag sent">Sent</span>}
+                      {a.has('resent')  && <span className="tag resent">Resent</span>}
+                      {a.has('updated') && <span className="tag updated">Updated</span>}
+                    </>
+                  );
+                })()}
               </span>
             </span>
           </button>
