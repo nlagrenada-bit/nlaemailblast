@@ -30,7 +30,7 @@ export default function SendDialog({
   useEffect(() => {
     if (!open) {
       setTyped(''); setMode('everyone'); setGroupIds([]);
-      setChosen(new Set()); setSearch(''); setIsResend(false); setDbOnly(false);
+      setChosen(new Set()); setSearch(''); setIsResend(false); setAction('both');
       return;
     }
     first.current?.focus();
