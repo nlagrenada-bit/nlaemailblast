@@ -10,6 +10,7 @@
 
 import { requireStaff } from './lib/supabaseAdmin.mjs';
 import { createClient } from '@supabase/supabase-js';
+import { publishDay } from './lib/publishDay.mjs';
 
 const json = (b, s = 200) =>
   new Response(JSON.stringify(b), { status: s, headers: { 'content-type': 'application/json' } });
@@ -36,6 +37,11 @@ export default async (request) => {
   try { body = await request.json(); } catch { return json({ error: 'Send a JSON body.' }, 400); }
 
   const drawDate = (body?.drawDate || '').trim();
+
+  // both (default) | website | email
+  const mode = ['both', 'website', 'email'].includes(body?.mode) ? body.mode : 'both';
+  const wantsWebsite = mode === 'both' || mode === 'website';
+  const wantsEmail   = mode === 'both' || mode === 'email';
   const subject  = (body?.subject || '').trim();
   const html     = body?.html || '';
   const text     = body?.text || '';
@@ -43,7 +49,7 @@ export default async (request) => {
   if (!drawDate) return json({ error: 'drawDate is required.' }, 400);
   // Without a message there is nothing to send — and rebuilding it here is what
   // caused single-draw sends to go out as the whole day.
-  if (!subject || !html) {
+  if (wantsEmail && (!subject || !html)) {
     return json({ error: 'The email could not be prepared. Reopen the draw and try again.' }, 400);
   }
 
@@ -73,7 +79,7 @@ export default async (request) => {
   }
   recipients = [...new Set(recipients)];
 
-  if (!recipients.length) {
+  if (wantsEmail && !recipients.length) {
     return json({ error: 'No active recipients matched this audience.' }, 422);
   }
 
@@ -94,8 +100,49 @@ export default async (request) => {
     scope_label: body?.scopeLabel || null,
     scope_kind: body?.scopeKind || null,
     is_resend: !!body?.isResend,
+    mode,
   }).select().single();
   if (runErr) return json({ error: runErr.message }, 500);
+
+  /* WEBSITES FIRST.
+     The public sites are the record of the result, and a website push takes a
+     few seconds while an email run takes a minute or more. Doing it first means
+     the results are public the moment the operator commits, rather than after
+     the last media house has been emailed — and a problem with the websites is
+     known before sixty emails have gone out, not after. */
+  let website = null;
+  if (wantsWebsite) {
+    try {
+      // The same routine "update websites only" uses, so the two can never
+      // drift apart again — including the jackpots.
+      website = await publishDay(admin, drawDate);
+    } catch (e) {
+      website = { sent: 0, failed: 1, errors: [e.message] };
+    }
+
+    const note = [
+      ...(website?.incomplete || []).map((x) => `Not sent: ${x}`),
+      ...(website?.errors || []),
+    ].join(' | ') || null;
+
+    await admin.from('blast_runs').update({
+      website_sent: website?.sent ?? 0,
+      website_failed: website?.failed ?? 0,
+      website_note: note,
+      website_done_at: new Date().toISOString(),
+    }).eq('id', run.id);
+  }
+
+  // Website only: nothing to email, so the run is finished.
+  if (!wantsEmail) {
+    await admin.from('blast_runs').update({
+      status: 'complete', finished_at: new Date().toISOString(),
+    }).eq('id', run.id);
+    return json({
+      runId: run.id, mode, totalRecipients: 0, estimatedMinutes: 0,
+      website: { sent: website?.sent ?? 0, failed: website?.failed ?? 0 },
+    }, 200);
+  }
 
   const { error: recErr } = await admin.from('blast_recipients')
     .insert(rows.map((r) => ({ run_id: run.id, email: r.email, is_internal: r.is_internal })));
@@ -120,9 +167,11 @@ export default async (request) => {
 
   return json({
     runId: run.id,
+    mode,
     totalRecipients: rows.length,
     externalRecipients: externalCount,
     estimatedMinutes: estimateMinutes(externalCount),
+    website: website ? { sent: website.sent ?? 0, failed: website.failed ?? 0 } : null,
   }, 202);
 };
 

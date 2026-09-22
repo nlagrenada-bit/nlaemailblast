@@ -73,13 +73,19 @@ export default function Rail({
   const actionsFor = (label) => {
     const set = new Set();
     for (const r of runs) {
-      // A website-only push covers the whole day, not one slot.
-      if (r.scope_kind === 'website_only') { set.add('updated'); continue; }
+      // A website push covers the whole day, not one slot — the portal
+      // receives every result for the date, whichever draw triggered it.
+      const pushedWebsite = r.scope_kind === 'website_only'
+        || r.mode === 'website' || r.mode === 'both';
+      if (pushedWebsite) set.add('updated');
+
+      // Email only counts for the slot it was about (or a full-day blast).
+      const emailed = r.mode !== 'website' && r.scope_kind !== 'website_only';
+      if (!emailed) continue;
       const covers = r.scope_label === label || r.scope_kind === 'eod';
       if (!covers) continue;
       if (r.is_resend) set.add('resent');
       else if (Number(r.total_recipients) > 0) set.add('sent');
-      else set.add('updated');
     }
     return set;
   };

@@ -15,7 +15,7 @@ export async function loadDay(date) {
     // here, and it carries what was actually done — the scope, whether it was a
     // resend, and whether it was a website-only update.
     supabase.from('blast_runs')
-      .select('id,scope_kind,scope_label,is_resend,status,total_recipients,sent_count,started_at')
+      .select('id,mode,scope_kind,scope_label,is_resend,status,total_recipients,sent_count,started_at')
       .eq('draw_date', date).order('started_at', { ascending: false }).then(unwrap),
   ]);
   return { day, daily: daily || [], cashPops: cashPops || [], lotto, super6, blasts: blasts || [] };
@@ -185,7 +185,7 @@ export const getBlast = (id) =>
 // immediately (HTTP 202); the actual send runs server-side over several minutes.
 // Poll the run with watchBlastRun() for progress.
 export async function sendBlast({
-  drawDate, subject, html, text,
+  drawDate, mode = 'both', subject, html, text,
   scopeLabel = null, scopeKind = null, isResend = false,
   groupIds = null, emails = null,
 }) {
@@ -197,7 +197,7 @@ export async function sendBlast({
       authorization: `Bearer ${session?.access_token ?? ''}`,
     },
     body: JSON.stringify({
-      drawDate, subject, html, text,
+      drawDate, mode, subject, html, text,
       scopeLabel, scopeKind, isResend,
       groupIds, emails,
     }),

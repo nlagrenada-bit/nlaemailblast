@@ -12,11 +12,21 @@
 
 import nodemailer from 'nodemailer';
 import { createClient } from '@supabase/supabase-js';
-import { pushResultsEverywhere } from './lib/pushAll.mjs';
-import { markPublished } from './lib/publish.mjs';
 
-const SLICE_EXTERNAL = Number(process.env.SLICE_EXTERNAL || 6);
-const SLICE_GAP_MS   = Number(process.env.SLICE_GAP_MS || 3000);
+/* Sending pace.
+   The old 6-per-slice, 3-second gap was set for Microsoft 365, which blocks a
+   mailbox sending more than about 30 messages a minute. Mail now goes through
+   Resend, which has no such ceiling — only an API rate limit.
+
+   Resend's own documentation variously states 2, 5 and 10 requests per second,
+   so the default is set UNDER the lowest of those: roughly 1.6 a second, which
+   is about five times faster than before and safe on any plan. If Resend ever
+   answers 429, the send waits the time it asks for and carries on.
+
+   Both are environment variables. Once you have confirmed your plan's limit on
+   Resend's Settings -> Usage page they can be raised. */
+const SLICE_EXTERNAL = Number(process.env.SLICE_EXTERNAL || 15);
+const SLICE_GAP_MS   = Number(process.env.SLICE_GAP_MS || 600);
 
 const SMTP_HOST = process.env.SMTP_HOST || 'smtp.office365.com';
 const SMTP_PORT = Number(process.env.SMTP_PORT || 587);
@@ -80,13 +90,28 @@ export default async (request) => {
       for (let i = 0; i < extPending.length; i++) {
         const rec = extPending[i];
         try {
-          const info = await transporter.sendMail({
+          const message = {
             from: FROM_ADDR, to: rec.email, replyTo: REPLY_TO, subject, html, text,
             headers: {
               'List-Unsubscribe': `<mailto:${REPLY_TO}?subject=unsubscribe>`,
               'X-Entity-Ref-ID': `${runId}-${rec.id}`,
             },
-          });
+          };
+
+          /* A temporary SMTP refusal (4xx) is the relay saying "slow down", not
+             "this address is bad". Wait and try again rather than marking a good
+             recipient failed. Resend's rate limit arrives this way over SMTP. */
+          let info;
+          for (let attempt = 1; ; attempt++) {
+            try {
+              info = await transporter.sendMail(message);
+              break;
+            } catch (e) {
+              const temporary = e.responseCode >= 400 && e.responseCode < 500;
+              if (!temporary || attempt >= 3) throw e;
+              await sleep(1500 * attempt);
+            }
+          }
           await admin.from('blast_recipients').update({
             status: 'sent', sent_at: new Date().toISOString(),
             smtp_response: info.response?.slice(0, 500) ?? null,
@@ -141,26 +166,14 @@ export default async (request) => {
     }
     transporter.close();
 
-    // ---- website push, then finish --------------------------------------
-    let website = null;
-    const date = drawDate || run.draw_date;
-    try {
-      const [daily, cashPops, lotto, super6] = await Promise.all([
-        admin.from('daily_results').select('*').eq('draw_date', date).then((r) => r.data || []),
-        admin.from('cash_pop_results').select('*').eq('draw_date', date)
-          .order('draw_no', { ascending: true }).then((r) => r.data || []),
-        admin.from('lotto_results').select('*').eq('draw_date', date).maybeSingle().then((r) => r.data),
-        admin.from('super6_results').select('*').eq('draw_date', date).maybeSingle().then((r) => r.data),
-      ]);
-      website = await pushResultsEverywhere({ date, daily, cashPops, lotto, super6 });
-      if (website?.sent > 0) await markPublished(admin, date);
-    } catch (e) { website = { error: e.message }; }
-
+    // ---- finish -----------------------------------------------------------
+    // The websites are NOT pushed here any more. The trigger does that FIRST,
+    // before any email goes out, and only when the chosen mode includes it.
+    // Pushing again here would double-push on a "both" send and wrongly push on
+    // an "email only" send.
     const c = await counts();
     await setRun({
       status: 'complete', sent_count: c.sent, failed_count: c.failed,
-      error_message: website?.failed
-        ? `${website.failed} website update(s) failed.` : null,
       finished_at: new Date().toISOString(),
     });
     return json({ done: true, sent: c.sent, failed: c.failed });

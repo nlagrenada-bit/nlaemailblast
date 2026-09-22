@@ -780,3 +780,44 @@ input.money.bad { border-color: #e5796d; background: #fdf5f4; }
 .tag.updated { background: #e8f1fb; color: #1a4d80; border: 1px solid #bcd6ef; }
 .tag.partial { background: #fff8e1; color: #8a6d00; border: 1px solid #f0dca0; }
 .stop-meta .tag + .tag { margin-left: 4px; }
+
+/* Send dialog: what to do */
+.actionpick { display: grid; gap: 7px; margin-bottom: 4px; }
+.actionpick button { text-align: left; padding: 11px 14px; border-radius: 9px; cursor: pointer;
+  border: 1px solid var(--line); background: var(--paper); font: inherit;
+  display: flex; flex-direction: column; gap: 2px; }
+.actionpick button b { font-family: var(--display); font-size: 13.5px; color: var(--ink); }
+.actionpick button span { font-size: 12px; color: var(--ink-3); line-height: 1.4; }
+.actionpick button:hover { border-color: #b8c6dc; }
+.actionpick button.on { border: 2px solid var(--navy); background: #eef3fb; padding: 10px 13px; }
+.actionpick button.on b { color: var(--navy); }
+
+/* Persistent send progress: websites, then email */
+.sendbar { position: fixed; right: 22px; bottom: 22px; z-index: 60; width: 340px;
+  background: var(--paper); border: 1px solid var(--line); border-radius: 12px;
+  box-shadow: 0 14px 38px -12px rgb(11 44 99 / 34%); padding: 13px 15px 12px; }
+.sendbar.finished { border-color: #b9dfc2; }
+.sendbar-head { display: flex; align-items: baseline; gap: 8px; margin-bottom: 9px; }
+.sendbar-head b { font-family: var(--display); font-size: 13.5px; color: var(--navy); }
+.sendbar-what { font-family: var(--mono); font-size: 10.5px; color: var(--ink-3);
+  text-transform: uppercase; letter-spacing: .06em; }
+.sendbar-x { margin-left: auto; background: none; border: 0; font-size: 18px; line-height: 1;
+  color: var(--ink-3); cursor: pointer; padding: 0 2px; }
+.sendbar-x:hover { color: var(--ink); }
+.sendbar-stages { display: flex; flex-direction: column; gap: 5px; font-size: 12.5px; color: var(--ink-2); }
+.stage { display: flex; align-items: center; gap: 8px; }
+.stage-dot { width: 9px; height: 9px; border-radius: 50%; background: #c3ccd9; flex-shrink: 0; }
+.stage.pending .stage-dot, .stage.running .stage-dot { background: #1e9bd7;
+  animation: livepulse 2.2s infinite; }
+.stage.done .stage-dot { background: #29c46a; }
+.stage.problem .stage-dot { background: #e0892b; }
+.stage.problem { color: #8a4b00; }
+.sendbar-track { margin-top: 10px; height: 6px; border-radius: 99px; background: var(--mist); overflow: hidden; }
+.sendbar-fill { height: 100%; background: var(--navy); border-radius: 99px; transition: width .6s ease; }
+.sendbar.finished .sendbar-fill { background: #29c46a; }
+.sendbar-note { margin: 8px 0 0; font-size: 11px; color: var(--ink-3); }
+@keyframes livepulse {
+  0% { box-shadow: 0 0 0 0 rgba(30,155,215,.5); }
+  70% { box-shadow: 0 0 0 7px rgba(30,155,215,0); }
+  100% { box-shadow: 0 0 0 0 rgba(30,155,215,0); }
+}

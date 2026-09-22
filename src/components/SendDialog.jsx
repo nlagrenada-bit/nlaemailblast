@@ -19,7 +19,10 @@ export default function SendDialog({
   const [search, setSearch] = useState('');
   const [count, setCount] = useState(null);
   const [isResend, setIsResend] = useState(false);
-  const [dbOnly, setDbOnly] = useState(false);
+  // both (default) | website | email
+  const [action, setAction] = useState('both');
+  const dbOnly = action === 'website';          // no email at all
+  const emailing = action !== 'website';
   const [typed, setTyped] = useState('');
   const [finalCheck, setFinalCheck] = useState(null);   // gaps awaiting a last look
   const first = useRef(null);
@@ -66,7 +69,7 @@ export default function SendDialog({
   const togglePerson = (id) =>
     setChosen((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
 
-  const confirmWord = dbOnly ? 'UPDATE' : (isResend ? 'RESEND' : 'SEND');
+  const confirmWord = action === 'website' ? 'UPDATE' : (isResend ? 'RESEND' : 'SEND');
   const ready = typed.trim().toUpperCase() === confirmWord
     && (dbOnly || count > 0) && !busy;
 
@@ -81,6 +84,7 @@ export default function SendDialog({
     emails: mode === 'pick' ? emailsForPick() : null,
     isResend,
     dbOnly,
+    action,
   });
 
   /* Last gate. Typing the confirm word proves intent to send; this proves the
@@ -97,7 +101,11 @@ export default function SendDialog({
       onKeyDown={(e) => e.key === 'Escape' && onClose()}>
       <div className="modal">
         <header>
-          <h2 id="send-title">{dbOnly ? 'Update the website only?' : (isResend ? 'Resend this blast?' : 'Send this blast?')}</h2>
+          <h2 id="send-title">{
+            action === 'website' ? 'Update the websites?'
+            : action === 'email' ? (isResend ? 'Resend the email?' : 'Send the email?')
+            : (isResend ? 'Update the websites and resend?' : 'Update the websites and send?')
+          }</h2>
           <p className="lede">
             This goes out immediately and cannot be recalled. Check the audience and the
             subject line below.
@@ -115,15 +123,27 @@ export default function SendDialog({
             </div>
           </div>
 
-          {/* database-only option */}
-          <label className="dbonly-toggle">
-            <input type="checkbox" checked={dbOnly} onChange={(e) => setDbOnly(e.target.checked)} />
-            <span>
-              <strong>Update the website/database only</strong> — push these results to the
-              website without emailing anyone. Use this to correct or backfill the site when no
-              email blast is needed.
-            </span>
-          </label>
+          {/* What to do. Websites always go first when both are chosen: they are
+              the public record, the push takes seconds, and a problem there is
+              found before sixty emails go out rather than after. */}
+          <div className="minihead" style={{ marginTop: 18 }}>What to do</div>
+          <div className="actionpick" role="radiogroup" aria-label="What to do">
+            <button type="button" role="radio" aria-checked={action === 'both'}
+              className={action === 'both' ? 'on' : ''} onClick={() => setAction('both')}>
+              <b>Update websites &amp; send email</b>
+              <span>Websites first, then the email. The usual choice.</span>
+            </button>
+            <button type="button" role="radio" aria-checked={action === 'website'}
+              className={action === 'website' ? 'on' : ''} onClick={() => setAction('website')}>
+              <b>Update websites only</b>
+              <span>No email. For correcting or backfilling the sites.</span>
+            </button>
+            <button type="button" role="radio" aria-checked={action === 'email'}
+              className={action === 'email' ? 'on' : ''} onClick={() => setAction('email')}>
+              <b>Send email only</b>
+              <span>Websites untouched. For resending to someone who missed it.</span>
+            </button>
+          </div>
 
           {/* audience mode */}
           <div style={{ marginTop: 18, opacity: dbOnly ? 0.4 : 1, pointerEvents: dbOnly ? 'none' : 'auto' }}>

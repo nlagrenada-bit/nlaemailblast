@@ -14,6 +14,7 @@ import Preview from '../components/Preview.jsx';
 import SendDialog from '../components/SendDialog.jsx';
 import { Ball, BallInput, DigitRow, MultiXPicker, SymbolChip } from '../components/Ball.jsx';
 import DrawNumber from '../components/DrawNumber.jsx';
+import SendProgress from '../components/SendProgress.jsx';
 import { useToast } from '../components/Toast.jsx';
 
 const logo = (file) => `${ASSET_BASE}/${file}`;
@@ -42,6 +43,7 @@ export default function ResultsView({ date, settings, groups, canSend }) {
   const [dialog, setDialog] = useState(false);
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState(null);
+  const [activeRun, setActiveRun] = useState(null);   // the send in progress, shown in a bar
   const [staleFrom, setStaleFrom] = useState(null);   // a change arrived while editing
   const [saving, setSaving] = useState(false);
 
@@ -239,74 +241,42 @@ export default function ResultsView({ date, settings, groups, canSend }) {
     }
   }
 
-  async function confirmSend({ groupIds, emails, isResend, dbOnly }) {
+  /* All three actions go through one path now: websites first, then email,
+     as chosen. The dialog closes the moment the send is accepted — nothing is
+     gained by holding it open, because the work carries on server-side
+     regardless. Progress moves to a bar that stays visible while the operator
+     gets on with the next draw. */
+  async function confirmSend({ groupIds, emails, isResend, action = 'both' }) {
     setBusy(true);
-    setProgress(null);
     try {
-      if (dbOnly) {
-        const r = await api.pushToWebsite(date);
-        const sent = r?.website?.sent ?? 0;
-        const failed = r?.website?.failed ?? 0;
-        const incomplete = r?.incomplete || [];
-
-        // A game with a result but no draw number cannot be sent. Say so
-        // plainly — otherwise it looks like a push that simply did nothing.
-        if (incomplete.length) {
-          toast(
-            `Sent ${sent}. Not sent: ${incomplete.join('; ')}. `
-            + `Add the missing draw number, then update again.`,
-            'bad',
-          );
-        } else if (failed) {
-          toast(`Websites updated with ${sent} result(s); ${failed} failed. `
-            + `${(r.errors || []).join(' | ')}`, 'info');
-        } else if (sent === 0) {
-          toast('Nothing was sent — check the results are entered for this day.', 'info');
-        } else {
-          toast(`Websites updated with ${sent} result(s). No email sent.`, 'good');
-        }
-        setDialog(false);
-        return;
-      }
-
-      // The email built for THIS selection - the same one shown in the preview,
-      // so a single draw sends that draw and not the whole day.
-      const subject = isResend ? `[RESENT] ${email.subject}` : email.subject;
-      const html    = isResend ? markResent(email.html) : email.html;
-      const text    = isResend
-        ? `*** RESENT - corrects earlier results ***\n\n${email.text}`
-        : email.text;
+      const emailing = action !== 'website';
+      const subject = emailing ? (isResend ? `[RESENT] ${email.subject}` : email.subject) : null;
+      const html    = emailing ? (isResend ? markResent(email.html) : email.html) : null;
+      const text    = emailing
+        ? (isResend ? `*** RESENT - corrects earlier results ***\n\n${email.text}` : email.text)
+        : null;
 
       const started = await api.sendBlast({
-        drawDate: date,
+        drawDate: date, mode: action,
         subject, html, text,
-        scopeLabel: scope.label,
-        scopeKind: scope.kind,
+        scopeLabel: scope.label, scopeKind: scope.kind,
         isResend: !!isResend,
         groupIds: groupIds?.length ? groupIds : null,
         emails: emails?.length ? emails : null,
       });
 
-      toast(
-        `Sending "${scope.label}" to ${started.totalRecipients} recipient`
-        + `${started.totalRecipients === 1 ? '' : 's'}. `
-        + `About ${started.estimatedMinutes} min - it continues even if you close this.`,
-        'good',
-      );
-      setProgress({ sent: 0, total: started.totalRecipients });
+      setDialog(false);                     // done with the dialog; progress takes over
 
-      const final = await api.watchBlastRun(started.runId, (run) => {
-        setProgress({ sent: run.sent_count, total: run.total_recipients, status: run.status });
+      setActiveRun({
+        id: started.runId, action, label: scope.label,
+        total: started.totalRecipients ?? 0,
+        website: started.website ?? null,
+        startedAt: Date.now(),
       });
-
-      const bits = [`Sent to ${final.sent_count} of ${final.total_recipients}`];
-      if (final.failed_count) bits.push(`${final.failed_count} failed`);
-      toast(bits.join(' \u00b7 ') + '.', final.failed_count ? 'info' : 'good');
-      setDialog(false);
       reload();
     } catch (e) {
       toast(e.message, 'bad');
-    } finally { setBusy(false); setProgress(null); }
+    } finally { setBusy(false); }
   }
 
   async function saveDraft() {
@@ -405,6 +375,12 @@ export default function ResultsView({ date, settings, groups, canSend }) {
           </button>
         </div>
       </Preview>
+
+      <SendProgress
+        run={activeRun}
+        onDone={() => reload()}
+        onDismiss={() => setActiveRun(null)}
+      />
 
       <SendDialog
         open={dialog} onClose={() => setDialog(false)} onConfirm={confirmSend}
