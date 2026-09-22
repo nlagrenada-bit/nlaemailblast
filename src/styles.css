@@ -401,7 +401,12 @@ input[type='search'], input[type='date'], textarea, select {
   border: 0; background: none; cursor: pointer; padding: 5px 12px;
   border-radius: 5px; font-size: 12px; font-weight: 600; color: var(--ink-2);
 }
-.seg button[aria-pressed='true'] { background: var(--paper); color: var(--navy); box-shadow: var(--shadow); }
+.seg button[aria-pressed='true'],
+.seg button[aria-selected='true'],
+.seg button[aria-checked='true'] {
+  background: var(--paper); color: var(--navy); box-shadow: var(--shadow);
+  font-weight: 700;
+}
 
 /* The email is a fixed 640px artefact. Rather than let it clip in a narrower
    panel, render it at true width and scale the whole frame down, so the
@@ -461,16 +466,22 @@ table.list .num { font-family: var(--mono); font-size: 12.5px; }
 }
 .modal {
   background: var(--paper); border-radius: 14px; width: min(560px, 100%);
-  max-height: 88vh; overflow: auto; box-shadow: 0 24px 60px -18px rgb(8 34 70 / 50%);
+  max-height: 88vh; box-shadow: 0 24px 60px -18px rgb(8 34 70 / 50%);
+  /* Only the BODY scrolls. Previously the whole modal did, which pushed the
+     Send button off-screen and made it look as though there was no way to
+     confirm. Header and footer now stay put whatever the content height. */
+  display: flex; flex-direction: column; overflow: hidden;
 }
 .modal header { padding: 20px 24px 0; }
 .modal h2 { font-family: var(--display); font-size: 18px; margin: 0 0 4px; }
 .modal p.lede { margin: 0; color: var(--ink-2); line-height: 1.55; }
-.modal .body { padding: 18px 24px; }
+.modal .body { padding: 16px 24px; overflow-y: auto; flex: 1 1 auto; min-height: 0; }
 .modal footer {
-  display: flex; gap: 10px; justify-content: flex-end;
-  padding: 16px 24px 22px; border-top: 1px solid var(--line-2);
+  display: flex; gap: 10px; justify-content: flex-end; align-items: center;
+  padding: 14px 24px 16px; border-top: 1px solid var(--line-2);
+  flex: 0 0 auto; background: var(--paper); border-radius: 0 0 14px 14px;
 }
+.modal header { flex: 0 0 auto; }
 
 .recap { border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
 .recap div {
@@ -781,16 +792,8 @@ input.money.bad { border-color: #e5796d; background: #fdf5f4; }
 .tag.partial { background: #fff8e1; color: #8a6d00; border: 1px solid #f0dca0; }
 .stop-meta .tag + .tag { margin-left: 4px; }
 
-/* Send dialog: what to do */
-.actionpick { display: grid; gap: 7px; margin-bottom: 4px; }
-.actionpick button { text-align: left; padding: 11px 14px; border-radius: 9px; cursor: pointer;
-  border: 1px solid var(--line); background: var(--paper); font: inherit;
-  display: flex; flex-direction: column; gap: 2px; }
-.actionpick button b { font-family: var(--display); font-size: 13.5px; color: var(--ink); }
-.actionpick button span { font-size: 12px; color: var(--ink-3); line-height: 1.4; }
-.actionpick button:hover { border-color: #b8c6dc; }
-.actionpick button.on { border: 2px solid var(--navy); background: #eef3fb; padding: 10px 13px; }
-.actionpick button.on b { color: var(--navy); }
+/* Send dialog: what to do — one compact row */
+.actionhint { margin: 7px 0 0; font-size: 12px; color: var(--ink-3); line-height: 1.45; }
 
 /* Persistent send progress: websites, then email */
 .sendbar { position: fixed; right: 22px; bottom: 22px; z-index: 60; width: 340px;

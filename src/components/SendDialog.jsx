@@ -126,24 +126,29 @@ export default function SendDialog({
           {/* What to do. Websites always go first when both are chosen: they are
               the public record, the push takes seconds, and a problem there is
               found before sixty emails go out rather than after. */}
-          <div className="minihead" style={{ marginTop: 18 }}>What to do</div>
-          <div className="actionpick" role="radiogroup" aria-label="What to do">
+          {/* One row rather than three stacked cards: the dialog has to fit
+              without scrolling, and the Send button must stay reachable. The
+              explanation moves to a single line that changes with the choice. */}
+          <div className="minihead" style={{ marginTop: 14 }}>What to do</div>
+          <div className="seg" role="radiogroup" aria-label="What to do">
             <button type="button" role="radio" aria-checked={action === 'both'}
-              className={action === 'both' ? 'on' : ''} onClick={() => setAction('both')}>
-              <b>Update websites &amp; send email</b>
-              <span>Websites first, then the email. The usual choice.</span>
+              aria-selected={action === 'both'} onClick={() => setAction('both')}>
+              Websites + email
             </button>
             <button type="button" role="radio" aria-checked={action === 'website'}
-              className={action === 'website' ? 'on' : ''} onClick={() => setAction('website')}>
-              <b>Update websites only</b>
-              <span>No email. For correcting or backfilling the sites.</span>
+              aria-selected={action === 'website'} onClick={() => setAction('website')}>
+              Websites only
             </button>
             <button type="button" role="radio" aria-checked={action === 'email'}
-              className={action === 'email' ? 'on' : ''} onClick={() => setAction('email')}>
-              <b>Send email only</b>
-              <span>Websites untouched. For resending to someone who missed it.</span>
+              aria-selected={action === 'email'} onClick={() => setAction('email')}>
+              Email only
             </button>
           </div>
+          <p className="actionhint">
+            {action === 'both' ? 'Websites are updated first, then the email goes out.'
+              : action === 'website' ? 'No email. For correcting or backfilling the sites.'
+              : 'Websites untouched. For resending to someone who missed it.'}
+          </p>
 
           {/* audience mode */}
           <div style={{ marginTop: 18, opacity: dbOnly ? 0.4 : 1, pointerEvents: dbOnly ? 'none' : 'auto' }}>

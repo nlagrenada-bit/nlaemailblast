@@ -13,6 +13,20 @@ import * as api from '../lib/api.js';
 export default function SendProgress({ run, onDone, onDismiss }) {
   const [live, setLive] = useState(null);
   const [finished, setFinished] = useState(false);
+  const [hidden, setHidden] = useState(false);
+
+  /* Clear itself after two minutes.
+     The panel sits in the corner over the Send button, so leaving it there
+     blocks the next draw. The send carries on server-side regardless — the
+     panel is only a view of it — so hiding it loses nothing. Progress is still
+     in History, and the draw's own status tag shows what happened. */
+  useEffect(() => {
+    if (!run?.id) return undefined;
+    setHidden(false);
+    const t = setTimeout(() => { setHidden(true); onDismiss?.(); }, 120_000);
+    return () => clearTimeout(t);
+    /* eslint-disable-next-line */
+  }, [run?.id]);
 
   useEffect(() => {
     if (!run?.id) return undefined;
@@ -39,7 +53,7 @@ export default function SendProgress({ run, onDone, onDismiss }) {
     /* eslint-disable-next-line */
   }, [run?.id]);
 
-  if (!run) return null;
+  if (!run || hidden) return null;
 
   const total = live?.total_recipients ?? run.total ?? 0;
   const sent = live?.sent_count ?? 0;
@@ -68,9 +82,10 @@ export default function SendProgress({ run, onDone, onDismiss }) {
             : run.action === 'email' ? 'Email only'
             : 'Websites, then email'}
         </span>
-        {finished && (
-          <button className="sendbar-x" onClick={onDismiss} aria-label="Dismiss">×</button>
-        )}
+        {/* Always dismissible: it overlays the Send button, so there must be a
+            way to move it out of the way at any point. */}
+        <button className="sendbar-x" onClick={() => { setHidden(true); onDismiss?.(); }}
+          aria-label="Dismiss">×</button>
       </div>
 
       <div className="sendbar-stages">
@@ -106,7 +121,7 @@ export default function SendProgress({ run, onDone, onDismiss }) {
 
       {!finished && doesMail && (
         <p className="sendbar-note">
-          Carries on if you move to another draw or close the tab.
+          Carries on if you close this or move to another draw.
         </p>
       )}
     </div>

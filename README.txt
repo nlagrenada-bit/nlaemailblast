@@ -1,69 +1,68 @@
-BLANK SCREEN AFTER LOGIN — FIXED
-=================================
+SEND DIALOG FITS WITHOUT SCROLLING  +  PROGRESS PANEL CLEARS ITSELF
+====================================================================
 
-THE CAUSE (my error)
+1. THE DIALOG NO LONGER NEEDS SCROLLING
+----------------------------------------
+Two things were wrong.
 
-Replacing the "database only" checkbox with the three action buttons, I removed
-the setDbOnly function but left one call to it, in SendDialog's reset effect:
+a) The three action buttons were tall stacked cards, each with a description.
+   They are now ONE ROW, with the explanation on a single line underneath that
+   changes with the choice:
 
-    setChosen(new Set()); setSearch(''); setIsResend(false); setDbOnly(false);
+       WHAT TO DO
+       [ Websites + email ][ Websites only ][ Email only ]
+       Websites are updated first, then the email goes out.
 
-The send dialog is always mounted — just closed — so that effect runs on EVERY
-page load. It called a function that no longer existed, threw a ReferenceError,
-and took the whole results page down with it. Hence nothing past login.
+b) More importantly, the WHOLE modal scrolled - header, body and footer
+   together - so the Send button scrolled out of sight. Only the body scrolls
+   now. The header and footer are pinned, so SEND IS ALWAYS VISIBLE however
+   long the content gets.
 
-FIXED: it now resets to the default action instead:
+Measured at three screen heights:
 
-    ... setIsResend(false); setAction('both');
+       900px viewport -> 616px dialog, no scrolling, Send visible
+       760px viewport -> 616px dialog, no scrolling, Send visible
+       640px viewport -> body scrolls, Send STILL visible
 
-That is also the correct behaviour: reopening the dialog starts from
-"Update websites & send email" rather than whatever was picked last time.
-
-
-A SECOND BUG, FOUND WHILE CHECKING
-
-The draw number field could be locked with NO WAY IN. When there is no earlier
-draw to count from there is no suggestion — so no Use button — but the field
-was still locked. The operator would be stuck. Its note also said "enter the
-draw number on the results page", while already on the results page.
-
-FIXED: the lock only applies when there is a suggestion to take. With nothing
-to suggest the field is open, and the note now reads:
-
-    "No earlier draw to count from — type the draw number."
+That second point matters more than the button sizes: even on a small laptop,
+or with a long subject line, the Send button can no longer disappear.
 
 
-WHY THIS SHIPPED, AND WHAT CHANGED
+A BUG FOUND WHILE DOING THIS
+The new action row had NO VISIBLE SELECTED STATE. The stylesheet highlights
+aria-pressed, but the row used aria-checked, so nothing was highlighted - on
+the control that decides whether 31 emails go out. The style now covers all
+three attributes, and the chosen option is clearly marked.
 
-I had been reporting "HOOKS CLEAN" after each change. Those checks were not
-running. The project uses ESLint 9, which rejects the flag I was passing, so
-the linter failed to start, printed nothing my filter recognised, and I read
-silence as success. Vite's build does not check for undefined names either, so
-nothing caught this.
 
-Now verified properly, three ways:
-  1. A working lint config, proven by a deliberate probe (an undefined call it
-     correctly flagged) before trusting it. Whole app: 0 errors.
-  2. The app actually LOADED in a headless browser past the login screen.
-     Results page mounted, zero page errors.
-  3. The draw number field confirmed typeable in the rendered page.
+2. THE PROGRESS PANEL CLEARS ITSELF AFTER TWO MINUTES
+------------------------------------------------------
+It sits in the bottom-right corner, over the Send button, so leaving it there
+blocked the next draw.
 
-eslint.config.check.mjs is included. To run the same check yourself:
+  - it now disappears on its own 120 seconds after a send starts
+  - the x is available at ALL times, not only once finished, so it can be moved
+    out of the way immediately
 
-    npx eslint -c eslint.config.check.mjs src netlify shared
-
-It needs:  npm i -D eslint-plugin-react eslint-plugin-react-hooks globals
+Nothing is lost by hiding it. The send runs on the server and carries on
+regardless - the panel was only ever a view of it. What happened is still in
+History, and the draw's own status tag shows Sent / Resent / Updated.
 
 
 FILES
-  src/components/SendDialog.jsx     the crash
-  src/components/DrawNumber.jsx     the locked-field trap
-  eslint.config.check.mjs           working lint config (optional)
+  src/components/SendDialog.jsx    one-row actions
+  src/components/SendProgress.jsx  auto-dismiss, always closable
+  src/components/DrawNumber.jsx    (the earlier hotfix, included)
+  src/styles.css                   modal structure, selected state
 
 DEPLOY
-  git add src/components/SendDialog.jsx src/components/DrawNumber.jsx
-  git commit -m "Fix blank screen after login; unlock draw number with no suggestion"
+  git add -A
+  git commit -m "Send dialog fits without scrolling; progress panel auto-clears"
   git push
 
-This is a two-file hotfix on top of the websites-first update, which still
-needs its SQL (11_send_modes.sql) run if that has not been done.
+
+VERIFIED
+  dialog measured at 900 / 760 / 640px - Send visible in all three
+  auto-dismiss timer exercised: hidden after the period, parent notified
+  whole app linted (0 errors) with a linter proven on a deliberate mistake
+  app loaded in a browser past login - page mounted, no errors
