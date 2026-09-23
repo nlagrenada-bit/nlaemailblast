@@ -845,3 +845,12 @@ input.money.bad { border-color: #e5796d; background: #fdf5f4; }
 .idlewarn-box p b { font-family: var(--mono); font-size: 16px; color: var(--navy); }
 .idlewarn-note { font-size: 12px !important; color: var(--ink-3) !important; }
 .idlewarn-box .btn { width: 100%; margin-top: 8px; }
+
+/* A button that reads as a link — used for "Forgot your password?" on the
+   sign-in card, where a ghost button was too faint to notice. */
+.linklike {
+  background: none; border: 0; padding: 4px; cursor: pointer;
+  font: inherit; font-size: 13.5px; font-weight: 600; color: var(--blue, #12489e);
+  text-decoration: underline; text-underline-offset: 3px; justify-self: center;
+}
+.linklike:hover { color: var(--navy); }
