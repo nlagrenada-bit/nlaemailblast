@@ -5,6 +5,7 @@ import * as api from './lib/api.js';
 import { ToastHost } from './components/Toast.jsx';
 import ResultsView from './views/ResultsView.jsx';
 import AutoEntryView from './views/AutoEntryView.jsx';
+import IdleLogout from './components/IdleLogout.jsx';
 import RecipientsView from './views/RecipientsView.jsx';
 import HistoryView from './views/HistoryView.jsx';
 import SettingsView from './views/SettingsView.jsx';
@@ -159,10 +160,18 @@ export default function App() {
               <input type="date" value={date} onChange={(e) => setDate(e.target.value)} aria-label="Draw date" />
               <button onClick={() => setDate((d) => shiftDate(d, 1))} aria-label="Next day">›</button>
               {date !== todayLocal() && (
-                <button onClick={() => setDate(todayLocal())} style={{ fontSize: 11 }}>Today</button>
+                /* Deliberately loud. When the desk is on a past date every
+                   entry goes to the wrong day, so the way back needs to be
+                   the most obvious thing in the bar. */
+                <button className="todaybtn" onClick={() => setDate(todayLocal())}
+                  title="Jump back to today's draws">
+                  TODAY
+                </button>
               )}
             </div>
           )}
+
+          <IdleLogout enabled={!!session} />
 
           <div className="who">
             <b>{staff?.full_name || session.user.email}</b>

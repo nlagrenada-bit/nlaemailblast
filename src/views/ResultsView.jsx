@@ -8,6 +8,8 @@ import { buildEmail } from '../../shared/emailTemplate.js';
 import { ASSET_BASE, EMAIL_ASSET_BASE } from '../lib/supabase.js';
 import { todayLocal } from '../lib/dates.js';
 import * as api from '../lib/api.js';
+import { drawForTimeOfDay, usePeriodicRefresh, isTypingInResults, gdToday }
+  from '../lib/autoRefresh.js';
 import { watchDay, isEditing } from '../lib/liveUpdates.js';
 import Rail from '../components/Rail.jsx';
 import Preview from '../components/Preview.jsx';
@@ -83,10 +85,18 @@ export default function ResultsView({ date, settings, groups, canSend }) {
 
   useEffect(() => {
     if (!state || selected) return;
-    setSelected(scheduled.daily ? 'daily:mid_morning'
+    /* Open on the draw that has just happened — the one waiting to be entered.
+       A refresh lands there too, because `selected` starts empty on every
+       mount. Past dates open at the beginning of their day instead. */
+    const fallback = scheduled.daily ? 'daily:mid_morning'
       : scheduled.cash_pop ? 'pop:kick_off'
-      : scheduled.lotto ? 'lotto' : scheduled.super6 ? 'super6' : 'eod');
-  }, [state, selected, scheduled]);
+      : scheduled.lotto ? 'lotto' : scheduled.super6 ? 'super6' : 'eod';
+    const key = date === gdToday() ? (drawForTimeOfDay(scheduled) || fallback) : fallback;
+    setSelected(key);
+  }, [state, selected, scheduled, date]);
+
+  // Keep the day's data current while the desk is left open.
+  usePeriodicRefresh(reload, 600_000, isTypingInResults);
 
   const [kind, code] = (selected || '').split(':');
   const dailyRow = code ? state?.daily.find((r) => r.period === code) : null;
