@@ -209,6 +209,15 @@ export default function ResultsView({ date, settings, groups, canSend }) {
       if (clean.length < pick || !allInRange || !unique) return;
       // Valid & complete → persist the compacted array.
       row.numbers = clean;
+    } else if (!Array.isArray(row.numbers) || row.numbers.length !== pick) {
+      /* Saving something other than the numbers — the letter, the draw number,
+         a payout — while the numbers are still incomplete. The letter is drawn
+         FIRST, so this is the normal order of work, not an edge case.
+
+         Send null rather than a half-filled array: the column accepts null for
+         a part-entered draw, but the length check rejects anything that is not
+         the full set. */
+      row.numbers = null;
     }
 
     setSaving(true);
