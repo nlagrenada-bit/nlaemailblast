@@ -854,3 +854,37 @@ input.money.bad { border-color: #e5796d; background: #fdf5f4; }
   text-decoration: underline; text-underline-offset: 3px; justify-self: center;
 }
 .linklike:hover { color: var(--navy); }
+
+/* Send dialog: the play.nla.gd check */
+.verifyline { margin-top: 14px; padding: 8px 12px; border-radius: 8px; font-size: 12.5px;
+  font-weight: 600; display: flex; align-items: center; gap: 8px; }
+.verifyline::before { content: ''; width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.verifyline.checking { background: #e8f1fb; color: #1a4d80; }
+.verifyline.checking::before { background: #1e9bd7; animation: livepulse 2.2s infinite; }
+.verifyline.ok { background: #eaf6ec; color: #1c6b34; }
+.verifyline.ok::before { background: #29c46a; }
+.verifyline.bad { background: #fdece9; color: #a01b12; }
+.verifyline.bad::before { background: #b3261e; }
+.verifyline.none { background: var(--mist); color: var(--ink-3); }
+.verifyline.none::before { background: #c3ccd9; }
+.finalcheck .tagx.mismatch { background: #6b1f8f; }
+
+/* Notice shown when fields were filled from play.nla.gd */
+.autofilled { display: flex; gap: 10px; align-items: center; }
+
+/* Send dialog: the play.nla.gd check */
+.verifyline { margin-top: 14px; padding: 8px 12px; border-radius: 8px; font-size: 12.5px;
+  font-weight: 600; display: flex; align-items: center; gap: 8px; }
+.verifyline::before { content: ''; width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.verifyline.checking { background: #e8f1fb; color: #1a4d80; }
+.verifyline.checking::before { background: #1e9bd7; animation: livepulse 2.2s infinite; }
+.verifyline.ok { background: #eaf6ec; color: #1c6b34; }
+.verifyline.ok::before { background: #29c46a; }
+.verifyline.bad { background: #fdece9; color: #a01b12; }
+.verifyline.bad::before { background: #b3261e; }
+.verifyline.none { background: var(--mist); color: var(--ink-3); }
+.verifyline.none::before { background: #c3ccd9; }
+.finalcheck .tagx.mismatch { background: #6b1f8f; }
+
+/* Notice shown when fields were filled from play.nla.gd */
+.autofilled { display: flex; gap: 10px; align-items: center; }

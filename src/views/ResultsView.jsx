@@ -17,6 +17,7 @@ import SendDialog from '../components/SendDialog.jsx';
 import { Ball, BallInput, DigitRow, MultiXPicker, SymbolChip } from '../components/Ball.jsx';
 import DrawNumber from '../components/DrawNumber.jsx';
 import SendProgress from '../components/SendProgress.jsx';
+import { verifyScope, fillsFor } from '../lib/playCheck.js';
 import { useToast } from '../components/Toast.jsx';
 
 const logo = (file) => `${ASSET_BASE}/${file}`;
@@ -46,6 +47,8 @@ export default function ResultsView({ date, settings, groups, canSend }) {
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState(null);
   const [activeRun, setActiveRun] = useState(null);   // the send in progress, shown in a bar
+  const [verify, setVerify] = useState(null);          // play.nla.gd check for the open dialog
+  const [autoFilled, setAutoFilled] = useState([]);    // what was filled in, for the notice
   const [staleFrom, setStaleFrom] = useState(null);   // a change arrived while editing
   const [saving, setSaving] = useState(false);
 
@@ -153,6 +156,76 @@ export default function ResultsView({ date, settings, groups, canSend }) {
   );
 
 
+  /* Fill empty fields from play.nla.gd once a draw has happened.
+
+     Checked every 60 seconds while looking at today. It only ever fills what is
+     BLANK — nothing an operator typed is overwritten — and never sets the draw
+     number, which stays a deliberate "Use" click. Filling is not sending: the
+     values are saved like typed ones, unpublished, and remain fully editable.
+
+     The patch functions read `state` from this render, so a timer would hold a
+     stale copy. They are reached through a ref that always points at the
+     latest ones. */
+  /* Check against play.nla.gd whenever the send dialog opens. It is fed by the
+     draw software itself, so a disagreement means one side is wrong — and the
+     email cannot be recalled once it goes. Send stays disabled until this has
+     finished, so it cannot be skipped by typing SEND quickly. */
+  useEffect(() => {
+    if (!dialog) { setVerify(null); return undefined; }
+    let cancelled = false;
+    setVerify({ checking: true });
+    api.autoEntry(date)
+      .then((r) => {
+        if (cancelled) return;
+        const v = verifyScope(latest.current.scope || {}, r?.items || []);
+        setVerify({ checking: false, ...v });
+      })
+      .catch(() => {
+        if (cancelled) return;
+        // The site being down must not stop the desk from working.
+        setVerify({ checking: false, mismatches: [], verified: 0,
+          unverified: ['play.nla.gd could not be reached, so nothing could be checked.'] });
+      });
+    return () => { cancelled = true; };
+    /* eslint-disable-next-line */
+  }, [dialog, date]);
+
+  const latest = useRef({});
+
+  useEffect(() => {
+    if (date !== gdToday()) return undefined;
+    let stopped = false;
+
+    const tick = async () => {
+      if (stopped || document.hidden || isTypingInResults()) return;
+      const { state: st, patchDaily: pd, patchPop: pp, patchJackpotGame: pj } = latest.current;
+      if (!st) return;
+      let items;
+      try { items = (await api.autoEntry(date))?.items || []; } catch { return; }
+      if (stopped) return;
+
+      const fills = fillsFor(date, st, items);
+      if (!fills.length) return;
+
+      const done = [];
+      for (const f of fills) {
+        if (isTypingInResults()) break;              // someone started typing — stop
+        try {
+          if (f.kind === 'daily') await pd(f.key, f.patch);
+          else if (f.kind === 'pop') await pp(f.key, f.patch);
+          else await pj(f.kind, f.patch);
+          done.push(f.label);
+        } catch { /* leave it for the next tick */ }
+      }
+      if (done.length) setAutoFilled((x) => [...new Set([...x, ...done])]);
+    };
+
+    tick();
+    const id = setInterval(tick, 60_000);
+    return () => { stopped = true; clearInterval(id); };
+    /* eslint-disable-next-line */
+  }, [date]);
+
   if (!state) return <div className="main"><div className="empty">Loading the day…</div></div>;
 
   // ------------------------------------------------------------- mutations
@@ -226,6 +299,11 @@ export default function ResultsView({ date, settings, groups, canSend }) {
       setState((s) => ({ ...s, [which]: saved }));
     } catch (e) { toast(e.message, 'bad'); } finally { setSaving(false); }
   };
+
+  // The auto-fill timer (declared above the early return, as hooks must be)
+  // reaches the latest save functions through this ref.
+  latest.current = { state, patchDaily, patchPop, patchJackpotGame, scope };
+
 
   const patchDay = async (patch) => {
     try {
@@ -333,6 +411,18 @@ export default function ResultsView({ date, settings, groups, canSend }) {
           )}
         </div>
 
+        {autoFilled.length > 0 && (
+          <div className="notice info autofilled">
+            <div>
+              <strong>Filled in from play.nla.gd:</strong> {autoFilled.join(', ')}.
+              {' '}Check them before sending — they are saved but not sent, and can be
+              edited like anything typed. The draw number still needs its Use button.
+            </div>
+            <button className="btn sm" style={{ marginLeft: 'auto', flexShrink: 0 }}
+              onClick={() => setAutoFilled([])}>Got it</button>
+          </div>
+        )}
+
         {staleFrom && (
           <div className="notice info live-update">
             <div>
@@ -404,7 +494,12 @@ export default function ResultsView({ date, settings, groups, canSend }) {
       <SendDialog
         open={dialog} onClose={() => setDialog(false)} onConfirm={confirmSend}
         email={email} date={date} label={scope.label} groups={groups}
-        warnings={check.warnings} blocking={check.blocking} busy={busy} progress={progress}
+        warnings={[...check.warnings, ...(verify?.unverified || [])]}
+        blocking={check.blocking}
+        mismatches={verify?.mismatches || []}
+        verifying={!!verify?.checking}
+        verifiedCount={verify?.verified ?? 0}
+        busy={busy} progress={progress}
       />
     </>
   );

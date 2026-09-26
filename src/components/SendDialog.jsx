@@ -10,7 +10,7 @@ import { countAudience, listSendable } from '../lib/api.js';
  * deliberate: a blast cannot be recalled.
  */
 export default function SendDialog({
-  open, onClose, onConfirm, email, date, label, groups, warnings = [], blocking = [], busy, progress,
+  open, onClose, onConfirm, email, date, label, groups, warnings = [], blocking = [], mismatches = [], verifying = false, verifiedCount = 0, busy, progress,
 }) {
   const [mode, setMode] = useState('everyone');    // 'everyone' | 'groups' | 'pick'
   const [groupIds, setGroupIds] = useState([]);
@@ -71,7 +71,7 @@ export default function SendDialog({
 
   const confirmWord = action === 'website' ? 'UPDATE' : (isResend ? 'RESEND' : 'SEND');
   const ready = typed.trim().toUpperCase() === confirmWord
-    && (dbOnly || count > 0) && !busy;
+    && (dbOnly || count > 0) && !busy && !verifying;
 
   // What we hand back: the group filter (or null), the explicit email list (or
   // null for group/everyone mode), the resend flag, and whether to skip email
@@ -91,7 +91,7 @@ export default function SendDialog({
      operator has seen what is missing. A blast cannot be recalled, so anything
      incomplete gets one final, explicit look before it goes. */
   const confirm = () => {
-    const gaps = [...blocking, ...warnings];
+    const gaps = [...mismatches, ...blocking, ...warnings];
     if (gaps.length === 0) return doSend();
     setFinalCheck(gaps);
   };
@@ -210,6 +210,54 @@ export default function SendDialog({
           </label>
           )}
 
+          {/* Where the play.nla.gd check stands. */}
+          <div className={`verifyline ${verifying ? 'checking'
+            : mismatches.length ? 'bad' : verifiedCount ? 'ok' : 'none'}`}>
+            {verifying ? 'Checking against play.nla.gd…'
+              : mismatches.length
+                ? `Does not match play.nla.gd — ${mismatches.length} problem${mismatches.length === 1 ? '' : 's'}`
+                : verifiedCount
+                  ? `Matches play.nla.gd (${verifiedCount} checked)`
+                  : 'Nothing could be checked against play.nla.gd'}
+          </div>
+
+          {mismatches.length > 0 && (
+            <div className="notice error" style={{ marginTop: 12, marginBottom: 0 }}>
+              <div>
+                <strong>These do not match play.nla.gd</strong>
+                <ul>{mismatches.map((w) => <li key={w}>{w}</li>)}</ul>
+                <p style={{ margin: '8px 0 0' }}>
+                  play.nla.gd is fed by the draw software. Check the numbers before
+                  sending — one of the two is wrong.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* Where the play.nla.gd check stands. */}
+          <div className={`verifyline ${verifying ? 'checking'
+            : mismatches.length ? 'bad' : verifiedCount ? 'ok' : 'none'}`}>
+            {verifying ? 'Checking against play.nla.gd…'
+              : mismatches.length
+                ? `Does not match play.nla.gd — ${mismatches.length} problem${mismatches.length === 1 ? '' : 's'}`
+                : verifiedCount
+                  ? `Matches play.nla.gd (${verifiedCount} checked)`
+                  : 'Nothing could be checked against play.nla.gd'}
+          </div>
+
+          {mismatches.length > 0 && (
+            <div className="notice error" style={{ marginTop: 12, marginBottom: 0 }}>
+              <div>
+                <strong>These do not match play.nla.gd</strong>
+                <ul>{mismatches.map((w) => <li key={w}>{w}</li>)}</ul>
+                <p style={{ margin: '8px 0 0' }}>
+                  play.nla.gd is fed by the draw software. Check the numbers before
+                  sending — one of the two is wrong.
+                </p>
+              </div>
+            </div>
+          )}
+
           {blocking.length > 0 && (
             <div className="notice error" style={{ marginTop: 16, marginBottom: 0 }}>
               <div>
@@ -269,6 +317,12 @@ export default function SendDialog({
               {' '}The following is incomplete:
             </p>
             <ul>
+              {mismatches.map((w) => (
+                <li key={w}><span className="tagx mismatch">play.nla.gd</span>{w}</li>
+              ))}
+              {mismatches.map((w) => (
+                <li key={w}><span className="tagx mismatch">play.nla.gd</span>{w}</li>
+              ))}
               {blocking.map((w) => (
                 <li key={w}><span className="tagx">websites</span>{w}</li>
               ))}
@@ -289,7 +343,8 @@ export default function SendDialog({
           <button className="btn ghost" onClick={onClose} disabled={busy}>
             {busy ? 'Close (send continues)' : 'Cancel'}
           </button>
-          <button className="btn send" disabled={!ready} onClick={confirm}>
+          <button className="btn send" disabled={!ready} onClick={confirm}
+            title={verifying ? 'Waiting for the play.nla.gd check to finish' : undefined}>
             {busy ? (dbOnly ? 'Updating…' : 'Sending…') : (dbOnly ? 'Update website' : `${isResend ? 'Resend' : 'Send'} to ${count ?? 0}`)}
           </button>
         </footer>

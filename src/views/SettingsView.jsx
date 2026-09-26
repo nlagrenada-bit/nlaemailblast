@@ -11,6 +11,10 @@ export default function SettingsView({ settings, onChanged }) {
   const [footer, setFooter] = useState(settings.footer || '');
   const [eodMode, setEodMode] = useState(settings.eod_mode || 'draft');
   const [testTo, setTestTo] = useState('info@nla.gd');
+  const [notifyList, setNotifyList] = useState(
+    (Array.isArray(settings.overdue_notify_emails) ? settings.overdue_notify_emails : []).join('\n'));
+  const [overdueMins, setOverdueMins] = useState(String(settings.overdue_minutes ?? 30));
+  const [overdueOn, setOverdueOn] = useState(settings.overdue_enabled !== false);
   const [testing, setTesting] = useState(false);
 
   async function save(key, value) {
@@ -104,11 +108,66 @@ export default function SettingsView({ settings, onChanged }) {
             </button>
           </div>
           <p style={{ margin: '12px 0 0', fontSize: 13, color: 'var(--ink-2)', lineHeight: 1.6 }}>
-            The job runs at 9:00pm, Monday to Saturday. On <b>stage a draft</b> it builds the
+            The job runs at 10:30pm, Monday to Saturday, after the 8:45pm Prime-Time Pop. On <b>stage a draft</b> it builds the
             complete day results, emails the desk to say it is ready, and waits for someone to
             press send. On <b>send automatically</b> it goes out unattended — only choose this
-            once you trust the day's entries to be complete by 9:00pm.
+            once you trust the day's entries to be complete by 10:30pm.
           </p>
+        </div>
+      </section>
+
+      <section className="card">
+        <header><h3>Late results alert</h3></header>
+        <div className="body">
+          <p style={{ margin: '0 0 12px', fontSize: 13, color: 'var(--ink-2)', lineHeight: 1.6 }}>
+            If a draw's results have not been <b>emailed</b> this long after the draw
+            closes, the people below are told. Each draw is reported once. Days and
+            games switched off in the day plan are never reported.
+          </p>
+
+          <label className="dbonly-toggle" style={{ marginBottom: 14 }}>
+            <input type="checkbox" checked={overdueOn}
+              onChange={(e) => { setOverdueOn(e.target.checked); save('overdue_enabled', e.target.checked); }} />
+            <span><strong>Send late results alerts</strong></span>
+          </label>
+
+          <div className="row" style={{ alignItems: 'flex-end', gap: 10 }}>
+            <div className="field">
+              <label>Alert after (minutes)</label>
+              <input type="number" min="5" max="240" value={overdueMins} style={{ width: 110 }}
+                onChange={(e) => setOverdueMins(e.target.value)} />
+            </div>
+            <button className="btn sm" onClick={() => {
+              const n = Math.round(Number(overdueMins));
+              if (!Number.isFinite(n) || n < 5 || n > 240) {
+                toast('Use a number between 5 and 240 minutes.', 'bad'); return;
+              }
+              save('overdue_minutes', n);
+            }}>Save</button>
+          </div>
+
+          <div className="field" style={{ marginTop: 16 }}>
+            <label>Who to tell — one address per line</label>
+            <textarea rows={4} value={notifyList} style={{ width: '100%', fontFamily: 'var(--mono)', fontSize: 13 }}
+              placeholder={'ddarbeau@nla.gd\nsupervisor@nla.gd'}
+              onChange={(e) => setNotifyList(e.target.value)} />
+          </div>
+          <button className="btn sm primary" style={{ marginTop: 8 }} onClick={() => {
+            const list = notifyList.split(/[\s,;]+/).map((x) => x.trim()).filter(Boolean);
+            const bad = list.filter((x) => !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(x));
+            if (bad.length) {
+              toast(`Not a valid address: ${bad.join(', ')}`, 'bad'); return;
+            }
+            const unique = [...new Set(list.map((x) => x.toLowerCase()))];
+            setNotifyList(unique.join('\n'));
+            save('overdue_notify_emails', unique);
+          }}>Save addresses</button>
+
+          {overdueOn && !notifyList.trim() && (
+            <div className="notice warn" style={{ marginTop: 14, marginBottom: 0 }}>
+              <div>No addresses yet, so no alerts will be sent.</div>
+            </div>
+          )}
         </div>
       </section>
     </div>

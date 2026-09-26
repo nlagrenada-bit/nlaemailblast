@@ -9,6 +9,7 @@
 import { requireStaff } from './lib/supabaseAdmin.mjs';
 import { createClient } from '@supabase/supabase-js';
 import { fetchResults } from './lib/resultSource.mjs';
+import { sameNumbers, sameValue, display } from '../../shared/compareResults.js';
 
 const json = (b, s = 200) =>
   new Response(JSON.stringify(b, null, 2), { status: s, headers: { 'content-type': 'application/json' } });
@@ -18,9 +19,6 @@ const GAME_LABEL = {
   cash_pop: 'Cash Pop', lotto: 'Lotto', super6: 'Super 6',
 };
 
-const eqNums = (a, b) =>
-  Array.isArray(a) && Array.isArray(b) && a.length === b.length
-  && a.every((v, i) => Number(v) === Number(b[i]));
 
 export default async (request) => {
   const auth = await requireStaff(request);
@@ -148,13 +146,16 @@ function reconcile(base, heldNumbers, heldLetter, heldMultiplier, heldDrawNo,
   }
 
   const diffs = [];
-  if (!eqNums(heldNumbers, base.numbers)) {
-    diffs.push(`numbers: app has ${heldNumbers.join(' ')}, play.nla.gd has ${base.numbers.join(' ')}`);
+  // Lotto and Super 6 are compared as sets: typed in call order, listed
+  // ascending on play.nla.gd. Pick 3 and Cash 4 are compared in order.
+  if (!sameNumbers(base.game, heldNumbers, base.numbers)) {
+    diffs.push(`numbers: app has ${display(base.game, heldNumbers)}, `
+      + `play.nla.gd has ${display(base.game, base.numbers)}`);
   }
-  if (base.multiplier && heldMultiplier && base.multiplier !== heldMultiplier) {
+  if (!sameValue(heldMultiplier, base.multiplier)) {
     diffs.push(`Multi-X: app has ${heldMultiplier}, play.nla.gd has ${base.multiplier}`);
   }
-  if (base.letter && heldLetter && base.letter !== heldLetter) {
+  if (!sameValue(heldLetter, base.letter)) {
     diffs.push(`letter: app has ${heldLetter}, play.nla.gd has ${base.letter}`);
   }
 
