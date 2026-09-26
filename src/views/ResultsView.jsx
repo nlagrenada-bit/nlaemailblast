@@ -57,7 +57,14 @@ export default function ResultsView({ date, settings, groups, canSend }) {
     api.nextDrawNumbers().then(setNextNos).catch(() => {});
     return api.loadDay(date).then(setState).catch((e) => toast(e.message, 'bad'));
   };
-  useEffect(() => { setState(null); reload(); /* eslint-disable-next-line */ }, [date]);
+  /* Changing day forgets the chosen draw, so the new day opens where it
+     should. Without this, moving to today with the TODAY button or the date
+     arrows kept whatever draw was open before, and the time-of-day choice
+     never ran. */
+  useEffect(() => {
+    setState(null); setSelected(null); reload();
+    /* eslint-disable-next-line */
+  }, [date]);
 
   /* Live updates. Another operator saving a result, or the nightly job
      publishing one, shows up here without anyone pressing refresh.
@@ -91,8 +98,12 @@ export default function ResultsView({ date, settings, groups, canSend }) {
     /* Open on the draw that has just happened — the one waiting to be entered.
        A refresh lands there too, because `selected` starts empty on every
        mount. Past dates open at the beginning of their day instead. */
-    const fallback = scheduled.daily ? 'daily:mid_morning'
-      : scheduled.cash_pop ? 'pop:kick_off'
+    /* The first draw of the day, in TIME order. The Kick-Off Pop at 8:45 comes
+       before the Mid-Morning Draw at 9:45. This used to test the daily draws
+       first — and since they run Monday to Saturday, that won every time, so
+       each day opened on Mid-Morning instead of the Pop. */
+    const fallback = scheduled.cash_pop ? 'pop:kick_off'
+      : scheduled.daily ? 'daily:mid_morning'
       : scheduled.lotto ? 'lotto' : scheduled.super6 ? 'super6' : 'eod';
     const key = date === gdToday() ? (drawForTimeOfDay(scheduled) || fallback) : fallback;
     setSelected(key);
