@@ -8,7 +8,7 @@ import { buildEmail } from '../../shared/emailTemplate.js';
 import { ASSET_BASE, EMAIL_ASSET_BASE } from '../lib/supabase.js';
 import { todayLocal } from '../lib/dates.js';
 import * as api from '../lib/api.js';
-import { drawForTimeOfDay, usePeriodicRefresh, isTypingInResults, gdToday }
+import { drawForTimeOfDay, usePeriodicRefresh, isTypingInResults, gdToday, pollDelay }
   from '../lib/autoRefresh.js';
 import { watchDay, isEditing } from '../lib/liveUpdates.js';
 import Rail from '../components/Rail.jsx';
@@ -231,9 +231,17 @@ export default function ResultsView({ date, settings, groups, canSend }) {
       if (done.length) setAutoFilled((x) => [...new Set([...x, ...done])]);
     };
 
-    tick();
-    const id = setInterval(tick, 60_000);
-    return () => { stopped = true; clearInterval(id); };
+    /* Every 12.5 seconds for fifteen minutes after each draw, every 60 seconds
+       otherwise. Rescheduled after each check, so the pace changes by itself
+       as a draw time comes round. See pollDelay() for why it is not fast all
+       day. */
+    let timer;
+    const loop = async () => {
+      await tick();
+      if (!stopped) timer = setTimeout(loop, pollDelay());
+    };
+    loop();
+    return () => { stopped = true; clearTimeout(timer); };
     /* eslint-disable-next-line */
   }, [date]);
 

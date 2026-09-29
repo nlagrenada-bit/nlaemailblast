@@ -83,3 +83,37 @@ export function usePeriodicRefresh(fn, everyMs = 600_000, isBusy = () => false) 
     /* eslint-disable-next-line */
   }, [everyMs]);
 }
+
+/* ---------------------------------------------------------------------------
+   How often to check play.nla.gd.
+
+   Fast straight after a draw, slow otherwise. play.nla.gd only changes when a
+   draw finishes, so checking quickly BETWEEN draws finds nothing and only uses
+   up Netlify's monthly allowance. On the free plan, running out of that
+   allowance does not produce a bill — it suspends the site for the rest of the
+   month, which would take the whole results desk down.
+
+   Checking every 12.5s all day, one screen open, is about 97,000 calls a
+   month; two screens pass the free limit on their own. Checking fast only in
+   the fifteen minutes after each draw gives the same quick fill-in when it
+   matters, at a fraction of the calls.
+--------------------------------------------------------------------------- */
+export const FAST_POLL_MS = 12_500;       // straight after a draw
+export const SLOW_POLL_MS = 60_000;       // the rest of the time
+export const FAST_WINDOW_MINUTES = 15;    // how long "straight after" lasts
+
+const DRAW_TIMES = [...new Set([
+  ...DAILY_PERIODS.map((p) => toMin(p.time)),
+  ...CASH_POP_PERIODS.map((p) => toMin(p.time)),
+  toMin('19:45'),                          // Lotto and Super 6
+])];
+
+/** Is it within the fast window after one of today's draws? */
+export function inFastWindow(now = new Date()) {
+  const m = gdMinutesNow(now);
+  return DRAW_TIMES.some((t) => m >= t && m < t + FAST_WINDOW_MINUTES);
+}
+
+export function pollDelay(now = new Date()) {
+  return inFastWindow(now) ? FAST_POLL_MS : SLOW_POLL_MS;
+}
