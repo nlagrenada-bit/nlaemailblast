@@ -8,7 +8,7 @@ import { buildEmail } from '../../shared/emailTemplate.js';
 import { ASSET_BASE, EMAIL_ASSET_BASE } from '../lib/supabase.js';
 import { todayLocal } from '../lib/dates.js';
 import * as api from '../lib/api.js';
-import { drawForTimeOfDay, usePeriodicRefresh, isTypingInResults, gdToday, pollDelay }
+import { drawForTimeOfDay, usePeriodicRefresh, isTypingInResults, gdToday, pollDelay, typedRecently }
   from '../lib/autoRefresh.js';
 import { watchDay, isEditing } from '../lib/liveUpdates.js';
 import Rail from '../components/Rail.jsx';
@@ -221,7 +221,7 @@ export default function ResultsView({ date, settings, groups, canSend }) {
     let stopped = false;
 
     const tick = async () => {
-      if (stopped || document.hidden || isTypingInResults()) return;
+      if (stopped || document.hidden || typedRecently()) return;
       const { state: st, patchDaily: pd, patchPop: pp, patchJackpotGame: pj } = latest.current;
       if (!st) return;
       let items;
@@ -233,7 +233,7 @@ export default function ResultsView({ date, settings, groups, canSend }) {
 
       const done = [];
       for (const f of fills) {
-        if (isTypingInResults()) break;              // someone started typing — stop
+        if (typedRecently()) break;                  // someone started typing — stop
         try {
           if (f.kind === 'daily') await pd(f.key, f.patch);
           else if (f.kind === 'pop') await pp(f.key, f.patch);
@@ -248,13 +248,28 @@ export default function ResultsView({ date, settings, groups, canSend }) {
        otherwise. Rescheduled after each check, so the pace changes by itself
        as a draw time comes round. See pollDelay() for why it is not fast all
        day. */
+    /* Wait for the day to load before the first check. Previously the first
+       check fired the instant the page opened, found no data, and gave up —
+       and the next one was a full minute away. Now it retries every second and
+       a half until the day is loaded, then settles into the normal pace. */
     let timer;
     const loop = async () => {
-      await tick();
-      if (!stopped) timer = setTimeout(loop, pollDelay());
+      const ready = !!latest.current.state;
+      if (ready) await tick();
+      if (stopped) return;
+      timer = setTimeout(loop, ready ? pollDelay(new Date(), latest.current.scheduled) : 1500);
     };
     loop();
-    return () => { stopped = true; clearTimeout(timer); };
+
+    // Coming back to the tab is the most likely moment for a result to be
+    // waiting, so check straight away rather than on the next tick.
+    const onVisible = () => { if (!document.hidden && latest.current.state) tick(); };
+    document.addEventListener('visibilitychange', onVisible);
+
+    return () => {
+      stopped = true; clearTimeout(timer);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
     /* eslint-disable-next-line */
   }, [date]);
 
@@ -334,7 +349,7 @@ export default function ResultsView({ date, settings, groups, canSend }) {
 
   // The auto-fill timer (declared above the early return, as hooks must be)
   // reaches the latest save functions through this ref.
-  latest.current = { state, patchDaily, patchPop, patchJackpotGame, scope };
+  latest.current = { state, patchDaily, patchPop, patchJackpotGame, scope, scheduled };
 
 
   const patchDay = async (patch) => {

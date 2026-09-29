@@ -145,12 +145,14 @@ export function fillsFor(date, state, items) {
            out what the one before had just written. */
         const same = fills.find((f) => f.kind === 'daily' && f.key === i.period);
         if (same) Object.assign(same.patch, patch);
-        else fills.push({ kind: 'daily', key: i.period, patch, label: 'Daily draw' });
+        else fills.push({ kind: 'daily', key: i.period, patch,
+          label: DAILY_PERIODS.find((p) => p.code === i.period)?.label || 'Daily draw' });
       }
     } else if (i.game === 'cash_pop') {
       const row = state.cashPops.find((r) => r.period === i.period);
       if (row?.number == null) {
-        fills.push({ kind: 'pop', key: i.period, patch: { number: i.numbers[0] }, label: 'Cash Pop' });
+        fills.push({ kind: 'pop', key: i.period, patch: { number: i.numbers[0] },
+          label: CASH_POP_PERIODS.find((p) => p.code === i.period)?.label || 'Cash Pop' });
       }
     } else if (i.game === 'lotto' || i.game === 'super6') {
       const row = i.game === 'lotto' ? state.lotto : state.super6;

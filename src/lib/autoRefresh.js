@@ -85,35 +85,69 @@ export function usePeriodicRefresh(fn, everyMs = 600_000, isBusy = () => false) 
 }
 
 /* ---------------------------------------------------------------------------
-   How often to check play.nla.gd.
+   When to check for results.
 
-   Fast straight after a draw, slow otherwise. play.nla.gd only changes when a
-   draw finishes, so checking quickly BETWEEN draws finds nothing and only uses
-   up Netlify's monthly allowance. On the free plan, running out of that
-   allowance does not produce a bill — it suspends the site for the rest of the
-   month, which would take the whole results desk down.
+   Results do not reach play.nla.gd the moment a draw happens. They appear a
+   little later, and at a different point for each game:
 
-   Checking every 12.5s all day, one screen open, is about 97,000 calls a
-   month; two screens pass the free limit on their own. Checking fast only in
-   the fifteen minutes after each draw gives the same quick fill-in when it
-   matters, at a fraction of the calls.
+       Cash Pop       about 10 min after its draw     8:45 -> ~8:55
+       Daily games    about 15 min after              9:45 -> ~10:00
+       Lotto          about 25 min after              7:45 -> ~8:10
+       Super 6        about 45 min after              7:45 -> ~8:30
+
+   So the fast checking STARTS when a game's results are due, and carries on
+   for fifteen minutes. The first version started it at the draw time instead,
+   which meant it checked hard while there was nothing to find and slowed down
+   at exactly the moment the results arrived.
+
+   The same timings serve the Abrazo JSON feed when it is switched on: the pace
+   is decided here, whichever source answers the check. If the feed publishes
+   sooner, shorten the delays below.
+
+   Outside the fast windows it still checks every 60 seconds, so a result that
+   arrives late is picked up rather than missed.
+
+   Fast checking only in these windows also keeps the number of checks well
+   inside Netlify's monthly allowance, which on the free plan suspends the site
+   when it runs out.
 --------------------------------------------------------------------------- */
-export const FAST_POLL_MS = 12_500;       // straight after a draw
+export const PUBLISH_DELAY_MINUTES = { cash_pop: 10, daily: 15, lotto: 25, super6: 45 };
+export const FAST_POLL_MS = 12_500;       // inside a window
 export const SLOW_POLL_MS = 60_000;       // the rest of the time
-export const FAST_WINDOW_MINUTES = 15;    // how long "straight after" lasts
+export const FAST_WINDOW_MINUTES = 15;    // how long each window lasts
 
-const DRAW_TIMES = [...new Set([
-  ...DAILY_PERIODS.map((p) => toMin(p.time)),
-  ...CASH_POP_PERIODS.map((p) => toMin(p.time)),
-  toMin('19:45'),                          // Lotto and Super 6
-])];
-
-/** Is it within the fast window after one of today's draws? */
-export function inFastWindow(now = new Date()) {
-  const m = gdMinutesNow(now);
-  return DRAW_TIMES.some((t) => m >= t && m < t + FAST_WINDOW_MINUTES);
+/** When each game's results should start appearing today, in minutes. */
+function publishTimes(scheduled) {
+  const s = scheduled || { daily: true, cash_pop: true, lotto: true, super6: true };
+  const out = [];
+  if (s.cash_pop) for (const p of CASH_POP_PERIODS) out.push(toMin(p.time) + PUBLISH_DELAY_MINUTES.cash_pop);
+  if (s.daily)    for (const p of DAILY_PERIODS)    out.push(toMin(p.time) + PUBLISH_DELAY_MINUTES.daily);
+  if (s.lotto)  out.push(toMin('19:45') + PUBLISH_DELAY_MINUTES.lotto);
+  if (s.super6) out.push(toMin('19:45') + PUBLISH_DELAY_MINUTES.super6);
+  return out;
 }
 
-export function pollDelay(now = new Date()) {
-  return inFastWindow(now) ? FAST_POLL_MS : SLOW_POLL_MS;
+/** Is it within fifteen minutes of a game's results becoming due? */
+export function inFastWindow(now = new Date(), scheduled) {
+  const m = gdMinutesNow(now);
+  return publishTimes(scheduled).some((t) => m >= t && m < t + FAST_WINDOW_MINUTES);
+}
+
+export function pollDelay(now = new Date(), scheduled) {
+  return inFastWindow(now, scheduled) ? FAST_POLL_MS : SLOW_POLL_MS;
+}
+
+/* Has the operator pressed a key in the last few seconds?
+
+   The auto-fill pauses while someone is actually typing, so a filled value can
+   never land in the middle of a keystroke. It used to pause whenever the cursor
+   was merely SITTING in a field — and since the cursor is placed in the draw
+   number field after pressing Use, that was nearly all the time. The fill
+   almost never ran. */
+let lastKeyAt = 0;
+if (typeof window !== 'undefined') {
+  window.addEventListener('keydown', () => { lastKeyAt = Date.now(); }, { capture: true, passive: true });
+}
+export function typedRecently(ms = 4000) {
+  return Date.now() - lastKeyAt < ms;
 }
