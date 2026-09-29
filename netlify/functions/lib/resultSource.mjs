@@ -29,6 +29,9 @@
 //     problems: [String],
 //     fetchedAt: ISO string,
 //     source: 'play.nla.gd' | 'abrazo'
+//     fullDay: whether EVERY draw of the requested day is present. play.nla.gd
+//              shows only the latest result per game, so it is never a full
+//              day; the Abrazo feed, asked for a date, is.
 //   }
 //
 // The two nulls are the whole reason this is assisted rather than automatic.
@@ -40,7 +43,7 @@
 import { fetchLatestResults as fetchFromPlay } from './playScrape.mjs';
 
 /** Placeholder for the Abrazo feed. Wired the day CBN provides it. */
-async function fetchFromCbn() {
+async function fetchFromCbn(date) {
   const base = process.env.CBN_API_BASE;
   const token = process.env.CBN_API_TOKEN;
   if (!base) {
@@ -49,7 +52,11 @@ async function fetchFromCbn() {
   }
 
   try {
-    const res = await fetch(`${base.replace(/\/$/, '')}/draws/latest`, {
+    // A whole day when a date is given — that is what lets the complete-day send
+    // be checked. The latest draws otherwise, as before.
+    const root = base.replace(/\/$/, '');
+    const url = date ? `${root}/draws?from=${date}&to=${date}` : `${root}/draws/latest`;
+    const res = await fetch(url, {
       headers: {
         Authorization: `Bearer ${token || ''}`,
         Accept: 'application/json',
@@ -65,6 +72,7 @@ async function fetchFromCbn() {
       problems: [],
       fetchedAt: new Date().toISOString(),
       source: 'abrazo',
+      fullDay: !!date,
     };
   } catch (e) {
     return { results: [], source: 'abrazo',
@@ -106,10 +114,10 @@ function fromAbrazo(d) {
 }
 
 /** Fetch from whichever source is configured. */
-export async function fetchResults() {
+export async function fetchResults(date) {
   if ((process.env.RESULT_SOURCE || 'play').toLowerCase() === 'cbn') {
-    return fetchFromCbn();
+    return fetchFromCbn(date);
   }
   const r = await fetchFromPlay();
-  return { ...r, source: 'play.nla.gd' };
+  return { ...r, source: 'play.nla.gd', fullDay: false };
 }

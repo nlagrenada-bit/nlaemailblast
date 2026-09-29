@@ -14,6 +14,7 @@ export default function SettingsView({ settings, onChanged }) {
   const [notifyList, setNotifyList] = useState(
     (Array.isArray(settings.overdue_notify_emails) ? settings.overdue_notify_emails : []).join('\n'));
   const [overdueMins, setOverdueMins] = useState(String(settings.overdue_minutes ?? 30));
+  const [overdueJackpotMins, setOverdueJackpotMins] = useState(String(settings.overdue_minutes_jackpot ?? 70));
   const [overdueOn, setOverdueOn] = useState(settings.overdue_enabled !== false);
   const [testing, setTesting] = useState(false);
 
@@ -131,20 +132,31 @@ export default function SettingsView({ settings, onChanged }) {
             <span><strong>Send late results alerts</strong></span>
           </label>
 
-          <div className="row" style={{ alignItems: 'flex-end', gap: 10 }}>
+          <div className="row" style={{ alignItems: 'flex-end', gap: 10, flexWrap: 'wrap' }}>
             <div className="field">
-              <label>Alert after (minutes)</label>
+              <label>Daily games &amp; Cash Pop (minutes)</label>
               <input type="number" min="5" max="240" value={overdueMins} style={{ width: 110 }}
                 onChange={(e) => setOverdueMins(e.target.value)} />
             </div>
+            <div className="field">
+              <label>Lotto &amp; Super 6 (minutes)</label>
+              <input type="number" min="5" max="240" value={overdueJackpotMins} style={{ width: 110 }}
+                onChange={(e) => setOverdueJackpotMins(e.target.value)} />
+            </div>
             <button className="btn sm" onClick={() => {
-              const n = Math.round(Number(overdueMins));
-              if (!Number.isFinite(n) || n < 5 || n > 240) {
-                toast('Use a number between 5 and 240 minutes.', 'bad'); return;
+              const a = Math.round(Number(overdueMins));
+              const b = Math.round(Number(overdueJackpotMins));
+              if (![a, b].every((n) => Number.isFinite(n) && n >= 5 && n <= 240)) {
+                toast('Use numbers between 5 and 240 minutes.', 'bad'); return;
               }
-              save('overdue_minutes', n);
+              save('overdue_minutes', a);
+              save('overdue_minutes_jackpot', b);
             }}>Save</button>
           </div>
+          <p style={{ margin: '6px 0 0', fontSize: 12, color: 'var(--ink-3)' }}>
+            Lotto and Super 6 get longer: prize tiers and the new jackpot are worked
+            out after the draw.
+          </p>
 
           <div className="field" style={{ marginTop: 16 }}>
             <label>Who to tell — one address per line</label>

@@ -10,7 +10,7 @@ import { countAudience, listSendable } from '../lib/api.js';
  * deliberate: a blast cannot be recalled.
  */
 export default function SendDialog({
-  open, onClose, onConfirm, email, date, label, groups, warnings = [], blocking = [], mismatches = [], verifying = false, verifiedCount = 0, busy, progress,
+  open, onClose, onConfirm, email, date, label, groups, warnings = [], blocking = [], mismatches = [], verifying = false, verifiedCount = 0, verifySkipped = false, verifySource = 'play.nla.gd', busy, progress,
 }) {
   const [mode, setMode] = useState('everyone');    // 'everyone' | 'groups' | 'pick'
   const [groupIds, setGroupIds] = useState([]);
@@ -212,22 +212,25 @@ export default function SendDialog({
 
           {/* Where the play.nla.gd check stands. */}
           <div className={`verifyline ${verifying ? 'checking'
+            : verifySkipped ? 'none'
             : mismatches.length ? 'bad' : verifiedCount ? 'ok' : 'none'}`}>
-            {verifying ? 'Checking against play.nla.gd…'
+            {verifying ? 'Checking the results…'
+              : verifySkipped
+                ? 'Complete day: not checked here — play.nla.gd only shows the latest draw. Each draw is checked when sent on its own.'
               : mismatches.length
-                ? `Does not match play.nla.gd — ${mismatches.length} problem${mismatches.length === 1 ? '' : 's'}`
+                ? `Does not match ${verifySource} — ${mismatches.length} problem${mismatches.length === 1 ? '' : 's'}`
                 : verifiedCount
-                  ? `Matches play.nla.gd (${verifiedCount} checked)`
-                  : 'Nothing could be checked against play.nla.gd'}
+                  ? `Matches ${verifySource} (${verifiedCount} checked)`
+                  : `Nothing could be checked against ${verifySource}`}
           </div>
 
           {mismatches.length > 0 && (
             <div className="notice error" style={{ marginTop: 12, marginBottom: 0 }}>
               <div>
-                <strong>These do not match play.nla.gd</strong>
+                <strong>These do not match {verifySource}</strong>
                 <ul>{mismatches.map((w) => <li key={w}>{w}</li>)}</ul>
                 <p style={{ margin: '8px 0 0' }}>
-                  play.nla.gd is fed by the draw software. Check the numbers before
+                  {verifySource} is fed by the draw software. Check the numbers before
                   sending — one of the two is wrong.
                 </p>
               </div>
@@ -294,10 +297,10 @@ export default function SendDialog({
             </p>
             <ul>
               {mismatches.map((w) => (
-                <li key={w}><span className="tagx mismatch">play.nla.gd</span>{w}</li>
+                <li key={w}><span className="tagx mismatch">{verifySource === 'play.nla.gd' ? 'play.nla.gd' : 'Abrazo'}</span>{w}</li>
               ))}
               {mismatches.map((w) => (
-                <li key={w}><span className="tagx mismatch">play.nla.gd</span>{w}</li>
+                <li key={w}><span className="tagx mismatch">{verifySource === 'play.nla.gd' ? 'play.nla.gd' : 'Abrazo'}</span>{w}</li>
               ))}
               {blocking.map((w) => (
                 <li key={w}><span className="tagx">websites</span>{w}</li>

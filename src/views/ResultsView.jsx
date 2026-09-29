@@ -188,8 +188,21 @@ export default function ResultsView({ date, settings, groups, canSend }) {
     api.autoEntry(date)
       .then((r) => {
         if (cancelled) return;
-        const v = verifyScope(latest.current.scope || {}, r?.items || [], date);
-        setVerify({ checking: false, ...v });
+        const sc = latest.current.scope || {};
+        /* The complete day is only checked against a source that has the WHOLE
+           day. play.nla.gd shows just the latest result per game, so checking
+           the day against it marks almost every draw "could not be checked" —
+           noise that teaches people to ignore the panel. Each draw is checked
+           when it is sent on its own. When the Abrazo feed is switched on it
+           supplies the full day, and this check turns itself back on. */
+        if (sc.kind === 'eod' && !r?.fullDay) {
+          setVerify({ checking: false, skipped: true, mismatches: [], unverified: [], verified: 0 });
+          return;
+        }
+        // Name the source in the messages: play.nla.gd today, the Abrazo feed later.
+        const sourceName = r?.source === 'abrazo' ? 'the Abrazo feed' : 'play.nla.gd';
+        const v = verifyScope(sc, r?.items || [], date, sourceName);
+        setVerify({ checking: false, sourceName, ...v });
       })
       .catch(() => {
         if (cancelled) return;
@@ -518,6 +531,8 @@ export default function ResultsView({ date, settings, groups, canSend }) {
         mismatches={verify?.mismatches || []}
         verifying={!!verify?.checking}
         verifiedCount={verify?.verified ?? 0}
+        verifySkipped={!!verify?.skipped}
+        verifySource={verify?.sourceName || 'play.nla.gd'}
         busy={busy} progress={progress}
       />
     </>

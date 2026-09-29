@@ -76,7 +76,7 @@ function expectedDraws(scope) {
  *   mismatches  the site disagrees — BLOCKING
  *   unverified  the site no longer shows this draw — a warning, not a pass
  */
-export function verifyScope(scope, items, date) {
+export function verifyScope(scope, items, date, source = 'play.nla.gd') {
   const mismatches = [];
   const unverified = [];
   let verified = 0;
@@ -85,23 +85,23 @@ export function verifyScope(scope, items, date) {
     if (!d.numbers) continue;                       // nothing entered; validation reports that
     const site = find(items, d.game, d.period, date);
     if (!site) {
-      unverified.push(`${d.label} — no longer shown on play.nla.gd, so it could not be checked.`);
+      unverified.push(`${d.label} — not in ${source}, so it could not be checked.`);
       continue;
     }
     const problems = [];
     if (!sameNumbers(d.game, d.numbers, site.numbers)) {
-      problems.push(`numbers ${display(d.game, d.numbers)} but play.nla.gd has ${display(d.game, site.numbers)}`);
+      problems.push(`numbers ${display(d.game, d.numbers)} but ${source} has ${display(d.game, site.numbers)}`);
     }
     if (!sameValue(d.multiplier, site.multiplier)) {
-      problems.push(`Multi-X ${d.multiplier} but play.nla.gd has ${site.multiplier}`);
+      problems.push(`Multi-X ${d.multiplier} but ${source} has ${site.multiplier}`);
     }
     if (!sameValue(d.letter, site.letter)) {
-      problems.push(`letter ${d.letter} but play.nla.gd has ${site.letter}`);
+      problems.push(`letter ${d.letter} but ${source} has ${site.letter}`);
     }
     // The jackpot we publish is the NEXT draw's estimated jackpot — the same
     // figure play.nla.gd shows beside its latest result — so they must agree.
     if ((d.game === 'lotto' || d.game === 'super6') && !sameMoney(d.jackpot, site.jackpot)) {
-      problems.push(`jackpot ${money(d.jackpot)} but play.nla.gd has ${money(site.jackpot)}`);
+      problems.push(`jackpot ${money(d.jackpot)} but ${source} has ${money(site.jackpot)}`);
     }
     if (problems.length) mismatches.push(`${d.label} — ${problems.join('; ')}.`);
     else verified += 1;

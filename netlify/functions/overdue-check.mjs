@@ -9,7 +9,10 @@
 //
 // Configured from the app, not from code:
 //   overdue_enabled        true / false
-//   overdue_minutes        how late before alerting        (default 30)
+//   overdue_minutes        how late before alerting, daily games and Cash Pop  (default 30)
+//   overdue_minutes_jackpot  the same for Lotto and Super 6                    (default 70)
+//     The jackpot games take longer: prize tiers and the new jackpot have to be
+//     worked out after the draw, so a 30-minute alert would fire routinely.
 //   overdue_notify_emails  who to tell                     (a list)
 //
 // Uses the same Resend SMTP as the results blast, so there is nothing extra to
@@ -37,12 +40,14 @@ export default async () => {
     { auth: { persistSession: false } });
 
   const { data: settingRows } = await admin.from('settings').select('key, value')
-    .in('key', ['overdue_enabled', 'overdue_minutes', 'overdue_notify_emails']);
+    .in('key', ['overdue_enabled', 'overdue_minutes', 'overdue_minutes_jackpot', 'overdue_notify_emails']);
   const cfg = Object.fromEntries((settingRows || []).map((r) => [r.key, r.value]));
 
   if (cfg.overdue_enabled === false) return new Response('disabled');
 
   const grace = Number(cfg.overdue_minutes) || 30;
+  const jackpotGrace = Number(cfg.overdue_minutes_jackpot) || 70;
+  const graceFor = (d) => (d.slot === 'lotto' || d.slot === 'super6' ? jackpotGrace : grace);
   const recipients = (Array.isArray(cfg.overdue_notify_emails) ? cfg.overdue_notify_emails : [])
     .map((e) => String(e).trim()).filter((e) => /\S+@\S+\.\S+/.test(e));
 
@@ -71,7 +76,7 @@ export default async () => {
   if (scheduled.lotto)  draws.push({ slot: 'lotto',  label: 'Lotto Draw',   time: '19:45' });
   if (scheduled.super6) draws.push({ slot: 'super6', label: 'Super 6 Draw', time: '19:45' });
 
-  const overdueNow = draws.filter((d) => minutes >= toMin(d.time) + grace);
+  const overdueNow = draws.filter((d) => minutes >= toMin(d.time) + graceFor(d));
   if (!overdueNow.length) return new Response('nothing due yet');
 
   // What has actually been emailed today. A full-day blast covers every draw.
@@ -95,15 +100,16 @@ export default async () => {
 
   // One message covering everything newly overdue.
   const lines = missing.map((d) =>
-    `  - ${d.label} (closed ${to12(d.time)}, now ${Math.floor(minutes - toMin(d.time))} min ago)`);
+    `  - ${d.label} (drawn ${to12(d.time)}, ${Math.floor(minutes - toMin(d.time))} min ago; `
+    + `allowed ${graceFor(d)} min)`);
 
   const subject = missing.length === 1
     ? `Results not yet sent: ${missing[0].label}`
     : `Results not yet sent: ${missing.length} draws`;
 
   const text = [
-    `The following draw results have not been emailed ${grace} minutes after the`,
-    `draw closed (${date}):`,
+    `The following draw results have not been emailed within the time allowed`,
+    `after the draw (${date}):`,
     '',
     ...lines,
     '',

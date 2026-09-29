@@ -30,7 +30,7 @@ export default async (request) => {
   const admin = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY,
     { auth: { persistSession: false } });
 
-  const scraped = await fetchResults();
+  const scraped = await fetchResults(date);
   if (!scraped.results.length) {
     return json({ error: `Could not read any results from ${scraped.source || 'the source'}.`,
                   problems: scraped.problems }, 502);
@@ -106,6 +106,7 @@ export default async (request) => {
   return json({
     ok: true,
     source: scraped.source || 'play.nla.gd',
+    fullDay: !!scraped.fullDay,
     fetchedAt: scraped.fetchedAt,
     date: date || null,
     counts,
