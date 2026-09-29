@@ -188,7 +188,7 @@ export default function ResultsView({ date, settings, groups, canSend }) {
     api.autoEntry(date)
       .then((r) => {
         if (cancelled) return;
-        const v = verifyScope(latest.current.scope || {}, r?.items || []);
+        const v = verifyScope(latest.current.scope || {}, r?.items || [], date);
         setVerify({ checking: false, ...v });
       })
       .catch(() => {

@@ -234,30 +234,6 @@ export default function SendDialog({
             </div>
           )}
 
-          {/* Where the play.nla.gd check stands. */}
-          <div className={`verifyline ${verifying ? 'checking'
-            : mismatches.length ? 'bad' : verifiedCount ? 'ok' : 'none'}`}>
-            {verifying ? 'Checking against play.nla.gd…'
-              : mismatches.length
-                ? `Does not match play.nla.gd — ${mismatches.length} problem${mismatches.length === 1 ? '' : 's'}`
-                : verifiedCount
-                  ? `Matches play.nla.gd (${verifiedCount} checked)`
-                  : 'Nothing could be checked against play.nla.gd'}
-          </div>
-
-          {mismatches.length > 0 && (
-            <div className="notice error" style={{ marginTop: 12, marginBottom: 0 }}>
-              <div>
-                <strong>These do not match play.nla.gd</strong>
-                <ul>{mismatches.map((w) => <li key={w}>{w}</li>)}</ul>
-                <p style={{ margin: '8px 0 0' }}>
-                  play.nla.gd is fed by the draw software. Check the numbers before
-                  sending — one of the two is wrong.
-                </p>
-              </div>
-            </div>
-          )}
-
           {blocking.length > 0 && (
             <div className="notice error" style={{ marginTop: 16, marginBottom: 0 }}>
               <div>

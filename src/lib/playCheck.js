@@ -21,8 +21,25 @@ const DAILY_GAMES = [
   ['cash4',    'Daily Cash 4', (r) => (r?.cash4_digits?.length ? r.cash4_digits : null),        (r) => r?.cash4_multiplier],
 ];
 
-const find = (items, game, period) =>
-  items.find((i) => i.game === game && (period == null || i.period === period));
+/* A site result counts as the SAME draw only if the game, the slot AND the
+   date agree. Without the date, sending yesterday's Evening draw was compared
+   against today's Evening draw, and an older Lotto against the newest one —
+   both reported as mismatches when nothing was wrong. */
+const find = (items, game, period, date) =>
+  items.find((i) => i.game === game
+    && (period == null || i.period === period)
+    && (!date || i.drawDate === date));
+
+/** Two money figures agree to the cent. Either side missing is not a mismatch. */
+const sameMoney = (a, b) => {
+  if (a === null || a === undefined || a === '') return true;
+  if (b === null || b === undefined || b === '') return true;
+  const x = Number(String(a).replace(/[^0-9.]/g, ''));
+  const y = Number(String(b).replace(/[^0-9.]/g, ''));
+  if (!Number.isFinite(x) || !Number.isFinite(y)) return true;
+  return Math.round(x * 100) === Math.round(y * 100);
+};
+const money = (v) => `$${Number(v).toLocaleString('en-US', { minimumFractionDigits: 0 })}`;
 
 /**
  * Every draw the current scope would send, taken straight from the scope's own
@@ -46,7 +63,8 @@ function expectedDraws(scope) {
   for (const [game, row, label] of [['lotto', scope.lotto, 'Lotto'], ['super6', scope.super6, 'Super 6']]) {
     if (!row) continue;
     out.push({ game, period: null, label,
-      numbers: row.numbers?.length ? row.numbers : null, letter: row.free_ticket_letter });
+      numbers: row.numbers?.length ? row.numbers : null, letter: row.free_ticket_letter,
+      jackpot: row.jackpot_amount });
   }
   return out;
 }
@@ -58,14 +76,14 @@ function expectedDraws(scope) {
  *   mismatches  the site disagrees — BLOCKING
  *   unverified  the site no longer shows this draw — a warning, not a pass
  */
-export function verifyScope(scope, items) {
+export function verifyScope(scope, items, date) {
   const mismatches = [];
   const unverified = [];
   let verified = 0;
 
   for (const d of expectedDraws(scope)) {
     if (!d.numbers) continue;                       // nothing entered; validation reports that
-    const site = find(items, d.game, d.period);
+    const site = find(items, d.game, d.period, date);
     if (!site) {
       unverified.push(`${d.label} — no longer shown on play.nla.gd, so it could not be checked.`);
       continue;
@@ -79,6 +97,11 @@ export function verifyScope(scope, items) {
     }
     if (!sameValue(d.letter, site.letter)) {
       problems.push(`letter ${d.letter} but play.nla.gd has ${site.letter}`);
+    }
+    // The jackpot we publish is the NEXT draw's estimated jackpot — the same
+    // figure play.nla.gd shows beside its latest result — so they must agree.
+    if ((d.game === 'lotto' || d.game === 'super6') && !sameMoney(d.jackpot, site.jackpot)) {
+      problems.push(`jackpot ${money(d.jackpot)} but play.nla.gd has ${money(site.jackpot)}`);
     }
     if (problems.length) mismatches.push(`${d.label} — ${problems.join('; ')}.`);
     else verified += 1;
