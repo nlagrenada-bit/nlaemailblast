@@ -133,8 +133,27 @@ export function inFastWindow(now = new Date(), scheduled) {
   return publishTimes(scheduled).some((t) => m >= t && m < t + FAST_WINDOW_MINUTES);
 }
 
+/**
+ * How long to wait before the next check.
+ *
+ * Inside a window: 12.5 seconds. Outside: 60 seconds — BUT never past the start
+ * of the next window. Without that, a slow wait that began just before a window
+ * opened ran its full minute: at 8:54:30 the next check landed at 8:55:30, so a
+ * Cash Pop published at 8:55 sat unfilled for most of a minute. Cash Pop draws
+ * are close together, so by then the operator had usually typed it themselves.
+ * Now the first check happens exactly when the results are due.
+ */
 export function pollDelay(now = new Date(), scheduled) {
-  return inFastWindow(now, scheduled) ? FAST_POLL_MS : SLOW_POLL_MS;
+  if (inFastWindow(now, scheduled)) return FAST_POLL_MS;
+
+  const nowMs = gdMinutesNow(now) * 60_000 + now.getUTCSeconds() * 1000 + now.getUTCMilliseconds();
+  const untilNext = publishTimes(scheduled)
+    .map((t) => t * 60_000 - nowMs)
+    .filter((ms) => ms > 0)
+    .reduce((a, b) => Math.min(a, b), Infinity);
+
+  // A little after the window opens, never sooner than a second.
+  return Math.max(1000, Math.min(SLOW_POLL_MS, untilNext + 500));
 }
 
 /* Has the operator pressed a key in the last few seconds?
