@@ -107,19 +107,26 @@ export default function SendDialog({
             : (isResend ? 'Update the websites and resend?' : 'Update the websites and send?')
           }</h2>
           <p className="lede">
-            This goes out immediately and cannot be recalled. Check the audience and the
-            subject line below.
+            {dbOnly
+              ? 'The results go to both websites straight away. No email is sent.'
+              : 'This goes out immediately and cannot be recalled. Check the audience and the subject line below.'}
           </p>
         </header>
 
         <div className="body">
+          {/* The summary follows the choice. "Websites only" sends no email, so
+              it must not show a subject line or a recipient count — it used to
+              show "29 addresses", which read as though an email was going out. */}
           <div className="recap">
-            <div><dt>Subject</dt><dd>{isResend ? `[RESENT] ${email?.subject}` : email?.subject}</dd></div>
+            {!dbOnly && (
+              <div><dt>Subject</dt><dd>{isResend ? `[RESENT] ${email?.subject}` : email?.subject}</dd></div>
+            )}
             <div><dt>Draw</dt><dd>{label}</dd></div>
             <div><dt>Date</dt><dd>{longDate(date)}</dd></div>
             <div>
-              <dt>Recipients</dt>
-              <dd>{count === null ? 'counting…' : `${count} address${count === 1 ? '' : 'es'}`}</dd>
+              <dt>{dbOnly ? 'Email' : 'Recipients'}</dt>
+              <dd>{dbOnly ? 'None — websites only'
+                : count === null ? 'counting…' : `${count} address${count === 1 ? '' : 'es'}`}</dd>
             </div>
           </div>
 
@@ -151,7 +158,9 @@ export default function SendDialog({
           </p>
 
           {/* audience mode */}
-          <div style={{ marginTop: 18, opacity: dbOnly ? 0.4 : 1, pointerEvents: dbOnly ? 'none' : 'auto' }}>
+          {/* Hidden, not greyed: greyed out it still read "Everyone". */}
+          {!dbOnly && (
+          <div style={{ marginTop: 18 }}>
             <div className="minihead">Audience</div>
             <div className="seg" role="tablist" style={{ marginBottom: 10 }}>
               <button role="tab" aria-selected={mode === 'everyone'} onClick={() => setMode('everyone')}>Everyone</button>
@@ -198,6 +207,7 @@ export default function SendDialog({
               unsubscribed and bounced addresses are skipped.
             </p>
           </div>
+          )}
 
           {/* resend flag */}
           {!dbOnly && (
@@ -260,7 +270,7 @@ export default function SendDialog({
             </div>
           )}
 
-          {count === 0 && mode !== 'pick' && (
+          {!dbOnly && count === 0 && mode !== 'pick' && (
             <div className="notice error" style={{ marginTop: 16, marginBottom: 0 }}>
               No active addresses match this audience. Add recipients or pick another group.
             </div>
@@ -290,9 +300,14 @@ export default function SendDialog({
           <div className="finalcheck">
             <h3>Send anyway?</h3>
             <p>
-              {count > 0
-                ? <>This goes to <strong>{count} recipient{count === 1 ? '' : 's'}</strong> and <strong>cannot be recalled</strong>.</>
-                : <>This updates the public websites and <strong>cannot be undone</strong> from here.</>}
+              {/* Worded by what was CHOSEN. It used to test whether there were any
+                  recipients, so a websites-only update with 29 people on the list
+                  said "This goes to 29 recipients". */}
+              {dbOnly
+                ? <>This updates the public websites and <strong>cannot be undone</strong> from here. No email is sent.</>
+                : action === 'email'
+                  ? <>This emails <strong>{count} recipient{count === 1 ? '' : 's'}</strong> and <strong>cannot be recalled</strong>. The websites are not touched.</>
+                  : <>This updates the websites and emails <strong>{count} recipient{count === 1 ? '' : 's'}</strong>. The email <strong>cannot be recalled</strong>.</>}
               {' '}The following is incomplete:
             </p>
             <ul>
@@ -323,7 +338,7 @@ export default function SendDialog({
             {busy ? 'Close (send continues)' : 'Cancel'}
           </button>
           <button className="btn send" disabled={!ready} onClick={confirm}
-            title={verifying ? 'Waiting for the play.nla.gd check to finish' : undefined}>
+            title={verifying ? `Waiting for the ${verifySource} check to finish` : undefined}>
             {busy ? (dbOnly ? 'Updating…' : 'Sending…') : (dbOnly ? 'Update website' : `${isResend ? 'Resend' : 'Send'} to ${count ?? 0}`)}
           </button>
         </footer>
