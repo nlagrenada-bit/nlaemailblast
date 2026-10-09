@@ -92,10 +92,16 @@ function payout(label, value) {
 /** One game inside a draw period: logo, draw number, sentence, balls, payout. */
 function gameCard(base, { logoFile, logoWidth, body, draw }) {
   const stamp = draw
-    ? `<td align="right" valign="middle" style="font-family:${FONT};font-size:11px;
-         letter-spacing:.08em;color:${C.soft};white-space:nowrap;">
-         <span style="background:${C.paper};border:1px solid ${C.rule};border-radius:999px;
-                      padding:4px 10px;display:inline-block;">${esc(drawNo(draw))}</span></td>`
+    ? `<td align="right" valign="middle" style="font-family:${FONT};white-space:nowrap;">
+         <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="right">
+           <tr><td align="center" bgcolor="${C.navy}"
+                   style="background:${C.navy};border-radius:6px;padding:6px 14px;
+                          font-family:${FONT};color:#FFFFFF;">
+             <div style="font-size:11px;line-height:14px;font-weight:bold;letter-spacing:.12em;
+                         color:${C.yellow};">DRAW NO.</div>
+             <div style="font-size:24px;line-height:28px;font-weight:bold;color:#FFFFFF;">${esc(String(draw))}</div>
+           </td></tr>
+         </table></td>`
     : '';
   return `
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"
