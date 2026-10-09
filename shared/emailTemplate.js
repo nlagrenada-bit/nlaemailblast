@@ -95,11 +95,11 @@ function gameCard(base, { logoFile, logoWidth, body, draw }) {
     ? `<td align="right" valign="middle" style="font-family:${FONT};white-space:nowrap;">
          <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="right">
            <tr><td align="center" bgcolor="${C.navy}"
-                   style="background:${C.navy};border-radius:6px;padding:6px 14px;
+                   style="background:${C.navy};border-radius:6px;padding:5px 12px;
                           font-family:${FONT};color:#FFFFFF;">
-             <div style="font-size:11px;line-height:14px;font-weight:bold;letter-spacing:.12em;
+             <div style="font-size:10px;line-height:12px;font-weight:bold;letter-spacing:.12em;
                          color:${C.yellow};">DRAW NO.</div>
-             <div style="font-size:24px;line-height:28px;font-weight:bold;color:#FFFFFF;">${esc(String(draw))}</div>
+             <div style="font-size:18px;line-height:22px;font-weight:bold;color:#FFFFFF;">${esc(String(draw))}</div>
            </td></tr>
          </table></td>`
     : '';
@@ -123,8 +123,8 @@ function periodHeading(banner, dateLong, kind = 'Draw') {
     <tr><td style="border-left:5px solid ${C.yellow};padding:2px 0 2px 12px;">
       <div style="font-family:${FONT};font-size:19px;line-height:24px;font-weight:bold;
                   color:${C.navy};letter-spacing:.4px;">${esc(banner)} ${esc(kind.toUpperCase())} RESULTS</div>
-      <div style="font-family:${FONT};font-size:13px;line-height:18px;color:${C.soft};
-                  padding-top:3px;">${esc(dateLong)}</div>
+      <div style="font-family:${FONT};font-size:17px;line-height:22px;font-weight:bold;
+                  color:${C.ink};padding-top:4px;">${esc(dateLong)}</div>
     </td></tr>
   </table>
   <p style="margin:0 0 16px;font-family:${FONT};font-size:15px;line-height:22px;color:${C.ink};">
