@@ -22,19 +22,44 @@ import { createClient } from '@supabase/supabase-js';
 import { publishDay } from './lib/publishDay.mjs';
 
 export default async (request) => {
+  let runId = null;
+  let admin = null;
+  try {
+    await run(request, (id, a) => { runId = id; admin = a; });
+  } catch (e) {
+    // Never leave the app waiting on a run that died: record why, and finish it.
+    console.error('publish-day-background failed', e);
+    if (runId && admin) {
+      await admin.from('blast_runs').update({
+        website_sent: 0, website_failed: 1,
+        website_note: `The background publish stopped with an error: ${String(e?.message || e).slice(0, 300)}`,
+        website_done_at: new Date().toISOString(),
+        status: 'complete', finished_at: new Date().toISOString(),
+      }).eq('id', runId).then(() => {}, () => {});
+    }
+  }
+};
+
+async function run(request, register) {
   let body;
-  try { body = await request.json(); } catch { return; }
+  try { body = await request.json(); } catch { console.error('publish-day-background: no JSON body'); return; }
   const { runId, drawDate, force = false, thenEmail = false } = body || {};
-  if (!runId || !drawDate) return;
+  if (!runId || !drawDate) { console.error('publish-day-background: runId/drawDate missing'); return; }
 
   const admin = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY,
     { auth: { persistSession: false } });
+  register(runId, admin);
 
-  const { data: run } = await admin.from('blast_runs')
+  const { data: run, error: readErr } = await admin.from('blast_runs')
     .select('id, status, draw_date, website_done_at').eq('id', runId).single();
+  if (readErr) throw new Error(`could not read the run: ${readErr.message}`);
   if (!run || run.website_done_at || run.status === 'complete' || run.status === 'failed') return;
-  if (run.draw_date !== drawDate) return;   // only ever the day the run was made for
+  if (String(run.draw_date).slice(0, 10) !== drawDate) throw new Error(`run is for ${run.draw_date}, asked for ${drawDate}`);
 
+  // Handshake: tells send-blast this background run really started. If this
+  // mark never appears, send-blast does the push itself instead.
+  await admin.from('blast_runs').update({ website_note: 'Started in the background.' }).eq('id', runId);
+  console.log(`publish-day-background: run ${runId} ${drawDate} started`);
   let website;
   try {
     website = await publishDay(admin, drawDate, { force });
@@ -75,4 +100,4 @@ export default async (request) => {
       signal: AbortSignal.timeout(5000),
     });
   } catch { /* the slice runs on server-side even if this wait is cut short */ }
-};
+}

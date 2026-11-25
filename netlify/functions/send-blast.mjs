@@ -147,16 +147,31 @@ export default async (request) => {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ runId: run.id, drawDate, force: !!body?.force, thenEmail: wantsEmail }),
-        signal: AbortSignal.timeout(3000),
+        signal: AbortSignal.timeout(2000),
       });
       bgAccepted = r.status === 202;
     } catch { /* not accepted: fall back below */ }
 
-    if (bgAccepted) return json({ ...accepted, website: null, background: true }, 202);
+    // A 202 only means Netlify accepted the call. Confirm the background run
+    // actually STARTED (it marks the row first thing) before trusting it; if
+    // it has not within a few seconds, do the push here instead, so a result
+    // is never left silently unpublished.
+    if (bgAccepted) {
+      const until = Date.now() + 2500;
+      while (Date.now() < until) {
+        const { data: row } = await admin.from('blast_runs')
+          .select('website_note, website_done_at').eq('id', run.id).single();
+        if (row?.website_done_at || /^Started in the background/.test(row?.website_note || '')) {
+          return json({ ...accepted, website: null, background: true }, 202);
+        }
+        await new Promise((r) => setTimeout(r, 400));
+      }
+      console.error(`send-blast: background publish for run ${run.id} did not start; pushing inline`);
+    }
 
     let website;
     try {
-      website = await publishDay(admin, drawDate, { deadline: startedAt + 7500, force: !!body?.force });
+      website = await publishDay(admin, drawDate, { deadline: startedAt + 8500, force: !!body?.force });
     } catch (e) {
       website = { sent: 0, failed: 1, unchanged: 0, errors: [e.message], incomplete: [] };
     }

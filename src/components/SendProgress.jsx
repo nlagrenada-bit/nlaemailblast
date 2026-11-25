@@ -15,18 +15,28 @@ export default function SendProgress({ run, onDone, onDismiss }) {
   const [finished, setFinished] = useState(false);
   const [hidden, setHidden] = useState(false);
 
-  /* Clear itself after two minutes.
-     The panel sits in the corner over the Send button, so leaving it there
-     blocks the next draw. The send carries on server-side regardless — the
-     panel is only a view of it — so hiding it loses nothing. Progress is still
-     in History, and the draw's own status tag shows what happened. */
+  const [slow, setSlow] = useState(false);
+
+  /* Clear itself two minutes after the send FINISHES.
+     It used to clear two minutes after it started, so a slow website push
+     vanished while still "publishing", which looked like success. It now
+     stays until there is an answer, then lingers long enough to be read.
+     The X always dismisses it at once. */
   useEffect(() => {
     if (!run?.id) return undefined;
     setHidden(false);
+    setSlow(false);
+    const s = setTimeout(() => setSlow(true), 90_000);
+    return () => clearTimeout(s);
+    /* eslint-disable-next-line */
+  }, [run?.id]);
+
+  useEffect(() => {
+    if (!run?.id || !finished) return undefined;
     const t = setTimeout(() => { setHidden(true); onDismiss?.(); }, 120_000);
     return () => clearTimeout(t);
     /* eslint-disable-next-line */
-  }, [run?.id]);
+  }, [run?.id, finished]);
 
   useEffect(() => {
     if (!run?.id) return undefined;
@@ -133,6 +143,14 @@ export default function SendProgress({ run, onDone, onDismiss }) {
           </div>
         )}
       </div>
+
+      {doesWeb && webState === 'pending' && slow && (
+        <p className="sendbar-note" style={{ color: '#8f1a15' }}>
+          No answer from the websites after 90 seconds. The update may have stopped.
+          Run Settings &gt; Website publishing check for this day to see what reached each site,
+          then send again if anything is missing.
+        </p>
+      )}
 
       {doesWeb && webNotes.length > 0 && (
         <ul className="sendbar-reasons" style={{ margin: '6px 0 0', paddingLeft: 18, fontSize: 12.5, lineHeight: 1.45,
