@@ -87,7 +87,7 @@ export function usePeriodicRefresh(fn, everyMs = 600_000, isBusy = () => false) 
 /* ---------------------------------------------------------------------------
    When to check for results.
 
-   Results do not reach play.nla.gd the moment a draw happens. They appear a
+   Results do not reach ilottery.nla.gd the moment a draw happens. They appear a
    little later, and at a different point for each game:
 
        Cash Pop       about 10 min after its draw     8:45 -> ~8:55

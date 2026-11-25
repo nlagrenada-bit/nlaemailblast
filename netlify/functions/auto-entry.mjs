@@ -1,6 +1,6 @@
 // GET /api/auto-entry?date=YYYY-MM-DD
 //
-// Reads the latest results from play.nla.gd and reconciles them against what
+// Reads the latest results from ilottery.nla.gd and reconciles them against what
 // the app holds, so an operator can review and accept rather than retype.
 //
 // This NEVER writes anything. It reports, and the app decides. Publishing stays
@@ -105,7 +105,7 @@ export default async (request) => {
 
   return json({
     ok: true,
-    source: scraped.source || 'play.nla.gd',
+    source: scraped.source || 'ilottery.nla.gd',
     fullDay: !!scraped.fullDay,
     fetchedAt: scraped.fetchedAt,
     date: date || null,
@@ -130,7 +130,7 @@ function reconcile(base, heldNumbers, heldLetter, heldMultiplier, heldDrawNo,
   const suggestedDrawNo = base.drawNo ?? heldDrawNo
     ?? (lastDrawNo ? Number(lastDrawNo) + 1 : null);
 
-  // Payouts are published after the numbers and are not on play.nla.gd at all,
+  // Payouts are published after the numbers and are not on ilottery.nla.gd at all,
   // so a result can be perfectly correct and still be waiting for one. That is
   // reported separately from a conflict — it is an outstanding task, not a
   // disagreement.
@@ -148,16 +148,16 @@ function reconcile(base, heldNumbers, heldLetter, heldMultiplier, heldDrawNo,
 
   const diffs = [];
   // Lotto and Super 6 are compared as sets: typed in call order, listed
-  // ascending on play.nla.gd. Pick 3 and Cash 4 are compared in order.
+  // ascending on ilottery.nla.gd. Pick 3 and Cash 4 are compared in order.
   if (!sameNumbers(base.game, heldNumbers, base.numbers)) {
     diffs.push(`numbers: app has ${display(base.game, heldNumbers)}, `
-      + `play.nla.gd has ${display(base.game, base.numbers)}`);
+      + `ilottery.nla.gd has ${display(base.game, base.numbers)}`);
   }
   if (!sameValue(heldMultiplier, base.multiplier)) {
-    diffs.push(`Multi-X: app has ${heldMultiplier}, play.nla.gd has ${base.multiplier}`);
+    diffs.push(`Multi-X: app has ${heldMultiplier}, ilottery.nla.gd has ${base.multiplier}`);
   }
   if (!sameValue(heldLetter, base.letter)) {
-    diffs.push(`letter: app has ${heldLetter}, play.nla.gd has ${base.letter}`);
+    diffs.push(`letter: app has ${heldLetter}, ilottery.nla.gd has ${base.letter}`);
   }
 
   return {

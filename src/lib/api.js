@@ -382,12 +382,12 @@ const authHeader = async () => {
   return { authorization: `Bearer ${session?.access_token ?? ''}` };
 };
 
-/** Read play.nla.gd and reconcile it against what the app holds. */
+/** Read ilottery.nla.gd and reconcile it against what the app holds. */
 export async function autoEntry(date) {
   const res = await fetch(`/api/auto-entry?date=${encodeURIComponent(date)}`,
     { headers: await authHeader() });
   const body = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(body.error || 'Could not read play.nla.gd.');
+  if (!res.ok) throw new Error(body.error || 'Could not read ilottery.nla.gd.');
   return body;
 }
 

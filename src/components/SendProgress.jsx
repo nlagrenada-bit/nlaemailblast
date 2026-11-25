@@ -64,6 +64,19 @@ export default function SendProgress({ run, onDone, onDismiss }) {
   const doesWeb = run.action === 'both' || run.action === 'website';
   const doesMail = run.action === 'both' || run.action === 'email';
 
+  // Why anything failed or was held back. Same-reason lines are merged so 13
+  // identical "401 invalid secret" lines read as one, with a count.
+  const rawNotes = web?.notes?.length ? web.notes
+    : (live?.website_note ? String(live.website_note).split(' | ') : []);
+  const webNotes = (() => {
+    const counts = new Map();
+    for (const n of rawNotes) {
+      const key = String(n).replace(/^(omp|wordpress)\s+\w+\s+/i, '$1: ').trim();
+      counts.set(key, (counts.get(key) || 0) + 1);
+    }
+    return [...counts].map(([k, c]) => (c > 1 ? `${k} (x${c})` : k));
+  })();
+
   const webState = !doesWeb ? null
     : !web ? 'pending'
     : web.failed ? 'problem'
@@ -94,9 +107,11 @@ export default function SendProgress({ run, onDone, onDismiss }) {
             <span className="stage-dot" />
             <span>
               Websites
-              {webState === 'done' && ` — ${web.sent} result${web.sent === 1 ? '' : 's'} published`}
-              {webState === 'problem' && ` — ${web.sent} published, ${web.failed} failed`}
-              {webState === 'pending' && ' — publishing…'}
+              {webState === 'done' && `: ${web.sent} result${web.sent === 1 ? '' : 's'} published`}
+              {webState === 'problem' && `: ${web.sent} published, ${web.failed} failed`}
+              {(webState === 'done' || webState === 'problem') && web.unchanged > 0
+                && `, ${web.unchanged} already up to date`}
+              {webState === 'pending' && ': publishing…'}
             </span>
           </div>
         )}
@@ -105,13 +120,21 @@ export default function SendProgress({ run, onDone, onDismiss }) {
           <div className={`stage ${mailState}`}>
             <span className="stage-dot" />
             <span>
-              Email — {sent} of {total}
+              Email: {sent} of {total}
               {failed ? `, ${failed} failed` : ''}
               {mailState === 'done' && ' sent'}
             </span>
           </div>
         )}
       </div>
+
+      {doesWeb && webNotes.length > 0 && (
+        <ul className="sendbar-reasons" style={{ margin: '6px 0 0', paddingLeft: 18, fontSize: 12.5, lineHeight: 1.45,
+          color: webState === 'problem' ? '#8f1a15' : 'var(--ink-2, #5a6b84)', maxHeight: 160, overflowY: 'auto' }}>
+          {webNotes.slice(0, 8).map((n, i) => <li key={i} style={{ wordBreak: 'break-word' }}>{n}</li>)}
+          {webNotes.length > 8 && <li>and {webNotes.length - 8} more. Settings &gt; Website publishing check shows them all.</li>}
+        </ul>
+      )}
 
       {doesMail && (
         <div className="sendbar-track">

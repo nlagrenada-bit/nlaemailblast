@@ -10,7 +10,7 @@ import { countAudience, listSendable } from '../lib/api.js';
  * deliberate: a blast cannot be recalled.
  */
 export default function SendDialog({
-  open, onClose, onConfirm, email, date, label, groups, warnings = [], blocking = [], mismatches = [], verifying = false, verifiedCount = 0, verifySkipped = false, verifySource = 'play.nla.gd', busy, progress,
+  open, onClose, onConfirm, email, date, label, groups, warnings = [], blocking = [], mismatches = [], verifying = false, verifiedCount = 0, verifySkipped = false, verifySource = 'ilottery.nla.gd', busy, progress,
 }) {
   const [mode, setMode] = useState('everyone');    // 'everyone' | 'groups' | 'pick'
   const [groupIds, setGroupIds] = useState([]);
@@ -220,13 +220,13 @@ export default function SendDialog({
           </label>
           )}
 
-          {/* Where the play.nla.gd check stands. */}
+          {/* Where the ilottery.nla.gd check stands. */}
           <div className={`verifyline ${verifying ? 'checking'
             : verifySkipped ? 'none'
             : mismatches.length ? 'bad' : verifiedCount ? 'ok' : 'none'}`}>
             {verifying ? 'Checking the results…'
               : verifySkipped
-                ? 'Complete day: not checked here — play.nla.gd only shows the latest draw. Each draw is checked when sent on its own.'
+                ? 'Complete day: not checked here — ilottery.nla.gd only shows the latest draw. Each draw is checked when sent on its own.'
               : mismatches.length
                 ? `Does not match ${verifySource} — ${mismatches.length} problem${mismatches.length === 1 ? '' : 's'}`
                 : verifiedCount
@@ -312,10 +312,10 @@ export default function SendDialog({
             </p>
             <ul>
               {mismatches.map((w) => (
-                <li key={w}><span className="tagx mismatch">{verifySource === 'play.nla.gd' ? 'play.nla.gd' : 'Abrazo'}</span>{w}</li>
+                <li key={w}><span className="tagx mismatch">{verifySource === 'ilottery.nla.gd' ? 'ilottery.nla.gd' : 'Abrazo'}</span>{w}</li>
               ))}
               {mismatches.map((w) => (
-                <li key={w}><span className="tagx mismatch">{verifySource === 'play.nla.gd' ? 'play.nla.gd' : 'Abrazo'}</span>{w}</li>
+                <li key={w}><span className="tagx mismatch">{verifySource === 'ilottery.nla.gd' ? 'ilottery.nla.gd' : 'Abrazo'}</span>{w}</li>
               ))}
               {blocking.map((w) => (
                 <li key={w}><span className="tagx">websites</span>{w}</li>

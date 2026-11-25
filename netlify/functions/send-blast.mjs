@@ -177,7 +177,10 @@ export default async (request) => {
     totalRecipients: rows.length,
     externalRecipients: externalCount,
     estimatedMinutes: estimateMinutes(externalCount),
-    website: website ? { sent: website.sent ?? 0, failed: website.failed ?? 0 } : null,
+    website: website ? {
+      sent: website.sent ?? 0, failed: website.failed ?? 0, unchanged: website.unchanged ?? 0,
+      notes: [...(website.incomplete || []), ...(website.errors || [])],
+    } : null,
   }, 202);
 };
 

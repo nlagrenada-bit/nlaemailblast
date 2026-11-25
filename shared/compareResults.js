@@ -6,7 +6,7 @@
  *   Pick 3, Cash 4      position IS the result. 9-0-4 and 0-4-9 are different
  *                       winning numbers, so these are compared in order.
  *   Lotto, Super 6      only the set matters. The desk types numbers in the
- *                       order they are called (15 9 14 13 7); play.nla.gd lists
+ *                       order they are called (15 9 14 13 7); ilottery.nla.gd lists
  *                       them ascending (7 9 13 14 15). Same draw, same result.
  *   Play Way, Cash Pop  a single number, so order never arises.
  *

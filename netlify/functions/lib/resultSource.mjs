@@ -2,13 +2,13 @@
 //
 // Where assisted entry gets its results from.
 //
-// Today that is play.nla.gd, scraped. The intention is that it becomes the
+// Today that is ilottery.nla.gd, scraped. The intention is that it becomes the
 // Abrazo/CBN JSON feed once that exists, and this file is the one place that
 // has to change — auto-entry.mjs, the reconciliation, the review page and the
 // accept path all work from the shape below and neither know nor care which
 // source produced it.
 //
-//   RESULT_SOURCE=play   (default)  scrape play.nla.gd
+//   RESULT_SOURCE=play   (default)  scrape ilottery.nla.gd
 //   RESULT_SOURCE=cbn               the Abrazo feed, once CBN_API_BASE is set
 //
 // THE SHAPE EVERY SOURCE MUST RETURN
@@ -28,8 +28,8 @@
 //     }],
 //     problems: [String],
 //     fetchedAt: ISO string,
-//     source: 'play.nla.gd' | 'abrazo'
-//     fullDay: whether EVERY draw of the requested day is present. play.nla.gd
+//     source: 'ilottery.nla.gd' | 'abrazo'
+//     fullDay: whether EVERY draw of the requested day is present. ilottery.nla.gd
 //              shows only the latest result per game, so it is never a full
 //              day; the Abrazo feed, asked for a date, is.
 //   }
@@ -119,5 +119,5 @@ export async function fetchResults(date) {
     return fetchFromCbn(date);
   }
   const r = await fetchFromPlay();
-  return { ...r, source: 'play.nla.gd', fullDay: false };
+  return { ...r, source: 'ilottery.nla.gd', fullDay: false };
 }

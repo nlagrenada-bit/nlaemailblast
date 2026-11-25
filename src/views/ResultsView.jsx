@@ -47,7 +47,7 @@ export default function ResultsView({ date, settings, groups, canSend }) {
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState(null);
   const [activeRun, setActiveRun] = useState(null);   // the send in progress, shown in a bar
-  const [verify, setVerify] = useState(null);          // play.nla.gd check for the open dialog
+  const [verify, setVerify] = useState(null);          // ilottery.nla.gd check for the open dialog
   const [autoFilled, setAutoFilled] = useState([]);    // what was filled in, for the notice
   const [staleFrom, setStaleFrom] = useState(null);   // a change arrived while editing
   const [saving, setSaving] = useState(false);
@@ -167,7 +167,7 @@ export default function ResultsView({ date, settings, groups, canSend }) {
   );
 
 
-  /* Fill empty fields from play.nla.gd once a draw has happened.
+  /* Fill empty fields from ilottery.nla.gd once a draw has happened.
 
      Checked every 60 seconds while looking at today. It only ever fills what is
      BLANK — nothing an operator typed is overwritten — and never sets the draw
@@ -177,7 +177,7 @@ export default function ResultsView({ date, settings, groups, canSend }) {
      The patch functions read `state` from this render, so a timer would hold a
      stale copy. They are reached through a ref that always points at the
      latest ones. */
-  /* Check against play.nla.gd whenever the send dialog opens. It is fed by the
+  /* Check against ilottery.nla.gd whenever the send dialog opens. It is fed by the
      draw software itself, so a disagreement means one side is wrong — and the
      email cannot be recalled once it goes. Send stays disabled until this has
      finished, so it cannot be skipped by typing SEND quickly. */
@@ -190,7 +190,7 @@ export default function ResultsView({ date, settings, groups, canSend }) {
         if (cancelled) return;
         const sc = latest.current.scope || {};
         /* The complete day is only checked against a source that has the WHOLE
-           day. play.nla.gd shows just the latest result per game, so checking
+           day. ilottery.nla.gd shows just the latest result per game, so checking
            the day against it marks almost every draw "could not be checked" —
            noise that teaches people to ignore the panel. Each draw is checked
            when it is sent on its own. When the Abrazo feed is switched on it
@@ -199,8 +199,8 @@ export default function ResultsView({ date, settings, groups, canSend }) {
           setVerify({ checking: false, skipped: true, mismatches: [], unverified: [], verified: 0 });
           return;
         }
-        // Name the source in the messages: play.nla.gd today, the Abrazo feed later.
-        const sourceName = r?.source === 'abrazo' ? 'the Abrazo feed' : 'play.nla.gd';
+        // Name the source in the messages: ilottery.nla.gd today, the Abrazo feed later.
+        const sourceName = r?.source === 'abrazo' ? 'the Abrazo feed' : 'ilottery.nla.gd';
         const v = verifyScope(sc, r?.items || [], date, sourceName);
         setVerify({ checking: false, sourceName, ...v });
       })
@@ -208,7 +208,7 @@ export default function ResultsView({ date, settings, groups, canSend }) {
         if (cancelled) return;
         // The site being down must not stop the desk from working.
         setVerify({ checking: false, mismatches: [], verified: 0,
-          unverified: ['play.nla.gd could not be reached, so nothing could be checked.'] });
+          unverified: ['ilottery.nla.gd could not be reached, so nothing could be checked.'] });
       });
     return () => { cancelled = true; };
     /* eslint-disable-next-line */
@@ -461,7 +461,7 @@ export default function ResultsView({ date, settings, groups, canSend }) {
         {autoFilled.length > 0 && (
           <div className="notice info autofilled">
             <div>
-              <strong>Filled in from play.nla.gd:</strong> {autoFilled.join(', ')}.
+              <strong>Filled in from ilottery.nla.gd:</strong> {autoFilled.join(', ')}.
               {' '}Check them before sending — they are saved but not sent, and can be
               edited like anything typed. The draw number still needs its Use button.
             </div>
@@ -547,7 +547,7 @@ export default function ResultsView({ date, settings, groups, canSend }) {
         verifying={!!verify?.checking}
         verifiedCount={verify?.verified ?? 0}
         verifySkipped={!!verify?.skipped}
-        verifySource={verify?.sourceName || 'play.nla.gd'}
+        verifySource={verify?.sourceName || 'ilottery.nla.gd'}
         busy={busy} progress={progress}
       />
     </>

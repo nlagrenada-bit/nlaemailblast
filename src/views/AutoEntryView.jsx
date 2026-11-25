@@ -6,7 +6,7 @@ import { longDate, MULTIPLIERS } from '../../shared/config.js';
 /**
  * Assisted entry.
  *
- * Reads the latest results from play.nla.gd, lines them up against what the app
+ * Reads the latest results from ilottery.nla.gd, lines them up against what the app
  * holds, and lets an operator accept them rather than retype. It is deliberately
  * SEMI-automatic:
  *
@@ -130,7 +130,7 @@ export default function AutoEntryView({ date, onEntered }) {
   };
 
   /* Add a payout to a result that is already in the app. Payouts land after the
-     numbers and are not on play.nla.gd at all, so this is a normal part of the
+     numbers and are not on ilottery.nla.gd at all, so this is a normal part of the
      day rather than a correction. */
   const savePayout = async (item) => {
     const k = key(item);
@@ -165,7 +165,7 @@ export default function AutoEntryView({ date, onEntered }) {
         <span className="sub">{longDate(date)}</span>
         <div className="auto-controls">
           <label className={`livetoggle${live ? ' on' : ''}`}
-            title="Re-read play.nla.gd every 90 seconds. Reads only — nothing is accepted or sent automatically.">
+            title="Re-read ilottery.nla.gd every 90 seconds. Reads only — nothing is accepted or sent automatically.">
             <input type="checkbox" checked={live}
               onChange={(e) => setLive(e.target.checked)} />
             <span className="dot" />
@@ -180,7 +180,7 @@ export default function AutoEntryView({ date, onEntered }) {
       <div className="notice info">
         <div>
           <strong>This is a helper, not an automatic publisher.</strong> Results are
-          read from play.nla.gd and lined up against the app. Nothing is written
+          read from ilottery.nla.gd and lined up against the app. Nothing is written
           until you accept it, nothing is sent, and payouts and draw numbers are
           not on that page — the draw number is suggested from the app's own
           sequence and payouts are still entered here.
@@ -237,7 +237,7 @@ export default function AutoEntryView({ date, onEntered }) {
             <div className="notice error">
               <div>
                 <strong>Resolve these before publishing anything for this day.</strong>
-                {' '}The app and play.nla.gd disagree. One of them is wrong, and a
+                {' '}The app and ilottery.nla.gd disagree. One of them is wrong, and a
                 wrong result reaching the media cannot be recalled.
               </div>
             </div>
@@ -325,7 +325,7 @@ export default function AutoEntryView({ date, onEntered }) {
                         {busy === k ? 'Saving…' : `Save ${i.needsJackpot ? 'jackpot' : 'payout'}`}
                       </button>
                       <span className="hint">
-                        not on play.nla.gd — enter it here or on the results page
+                        not on ilottery.nla.gd — enter it here or on the results page
                       </span>
                     </div>
                   )}

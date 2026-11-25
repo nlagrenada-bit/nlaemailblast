@@ -2,7 +2,7 @@
 //
 // Adds or corrects the payout (or jackpot) on a result that already exists.
 //
-// Payouts are published after the winning numbers, and play.nla.gd does not
+// Payouts are published after the winning numbers, and ilottery.nla.gd does not
 // carry them at all, so a result is routinely correct but waiting on its
 // payout. This lets that be finished from the assisted-entry page instead of
 // making the operator go back to manual entry for one figure.

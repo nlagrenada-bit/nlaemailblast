@@ -2,15 +2,15 @@ import { sameNumbers, sameValue, display } from '../../shared/compareResults.js'
 import { DAILY_PERIODS, CASH_POP_PERIODS } from '../../shared/config.js';
 
 /**
- * Checking the desk against play.nla.gd.
+ * Checking the desk against ilottery.nla.gd.
  *
- * play.nla.gd is fed directly by the draw software, so it is the best
+ * ilottery.nla.gd is fed directly by the draw software, so it is the best
  * independent check on what the operator has typed. Two jobs use it:
  *
  *   verifyScope()  before sending, does what we are about to publish agree?
  *   fillsFor()     after a draw, what empty fields can be filled in for us?
  *
- * One limit shapes both: play.nla.gd shows only the LATEST result per game.
+ * One limit shapes both: ilottery.nla.gd shows only the LATEST result per game.
  * An earlier draw that has since been superseded cannot be checked, and that is
  * reported honestly as "could not verify" rather than as a pass.
  */
@@ -70,13 +70,13 @@ function expectedDraws(scope) {
 }
 
 /**
- * Before sending: does what we are about to publish agree with play.nla.gd?
+ * Before sending: does what we are about to publish agree with ilottery.nla.gd?
  *
  * Returns { mismatches, unverified, verified }.
  *   mismatches  the site disagrees — BLOCKING
  *   unverified  the site no longer shows this draw — a warning, not a pass
  */
-export function verifyScope(scope, items, date, source = 'play.nla.gd') {
+export function verifyScope(scope, items, date, source = 'ilottery.nla.gd') {
   const mismatches = [];
   const unverified = [];
   let verified = 0;
@@ -99,7 +99,7 @@ export function verifyScope(scope, items, date, source = 'play.nla.gd') {
       problems.push(`letter ${d.letter} but ${source} has ${site.letter}`);
     }
     // The jackpot we publish is the NEXT draw's estimated jackpot — the same
-    // figure play.nla.gd shows beside its latest result — so they must agree.
+    // figure ilottery.nla.gd shows beside its latest result — so they must agree.
     if ((d.game === 'lotto' || d.game === 'super6') && !sameMoney(d.jackpot, site.jackpot)) {
       problems.push(`jackpot ${money(d.jackpot)} but ${source} has ${money(site.jackpot)}`);
     }
@@ -110,7 +110,7 @@ export function verifyScope(scope, items, date, source = 'play.nla.gd') {
 }
 
 /**
- * After a draw: which EMPTY fields can be filled from play.nla.gd?
+ * After a draw: which EMPTY fields can be filled from ilottery.nla.gd?
  *
  * Only ever fills what is blank. Never overwrites anything an operator has
  * typed, never sets the draw number (that stays a deliberate "Use" click), and
