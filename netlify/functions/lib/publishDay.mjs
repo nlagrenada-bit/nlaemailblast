@@ -29,28 +29,72 @@ export async function loadDay(admin, drawDate) {
   return { daily, cashPops, lotto, super6 };
 }
 
-export async function publishDay(admin, drawDate) {
+/** Resolve to `fallback` if `promise` has not settled by `deadline`. */
+const before = (promise, deadline, fallback) => {
+  const ms = deadline - Date.now();
+  if (!Number.isFinite(ms)) return promise;
+  return Promise.race([promise, new Promise((r) => setTimeout(() => r(fallback), Math.max(0, ms)))]);
+};
+
+/** True when this exact WordPress jackpot figure was already sent successfully. */
+async function jackpotAlreadySent(admin, game, drawNo, amount) {
+  try {
+    const { data } = await admin.from('website_push_log').select('fingerprint')
+      .eq('target', 'wordpress').eq('game', `${game}_jackpot`).eq('draw_no', Number(drawNo) || 0).maybeSingle();
+    return data?.fingerprint === String(amount);
+  } catch { return false; }
+}
+
+async function rememberJackpot(admin, game, drawNo, amount) {
+  try {
+    await admin.from('website_push_log').upsert({
+      target: 'wordpress', game: `${game}_jackpot`, draw_no: Number(drawNo) || 0,
+      fingerprint: String(amount), sent_at: new Date().toISOString(),
+    }, { onConflict: 'target,game,draw_no' });
+  } catch { /* never fail the push over logging */ }
+}
+
+/**
+ * opts.deadline  epoch ms by which everything must have finished. Netlify cuts a
+ *                normal function off at 10 seconds and the browser then sees no
+ *                answer at all ("The blast could not be started"). Anything not
+ *                done by the deadline is reported so a second press finishes it.
+ * opts.force     resend everything, even draws the sites already hold.
+ */
+export async function publishDay(admin, drawDate, opts = {}) {
+  const deadline = opts.deadline || Infinity;
   const { daily, cashPops, lotto, super6 } = await loadDay(admin, drawDate);
 
-  const website = await pushResultsEverywhere({ date: drawDate, daily, cashPops, lotto, super6 });
+  const jackpotJob = (async () => {
+    const out = [];
+    await Promise.all([['lotto', lotto], ['super6', super6]].map(async ([game, row]) => {
+      const jp = Number(row?.jackpot_amount);
+      if (!row || !Number.isFinite(jp) || jp <= 0) return;
+      const won = Number(row.jackpot_winners) > 0;
+      const hasNumbers = !!row.numbers?.length;
+      const skipWp = !opts.force && await jackpotAlreadySent(admin, game, row.draw_no, jp);
+      const [omp, wordpress] = await Promise.all([
+        hasNumbers ? Promise.resolve({ ok: true, note: 'sent with the result' })
+                   : before(pushJackpot(game, jp, { jackpotWon: won }), deadline,
+                       { ok: false, error: 'not sent yet (time limit reached). Press update again to finish' }),
+        skipWp ? Promise.resolve({ ok: true, note: 'already on the site' })
+               : before(pushHexiveJackpot(game, jp), deadline,
+                   { ok: false, error: 'not sent yet (time limit reached). Press update again to finish' }),
+      ]);
+      if (wordpress?.ok && !skipWp) await rememberJackpot(admin, game, row.draw_no, jp);
+      out.push({ game, jackpot: jp, omp, wordpress });
+    }));
+    return out;
+  })();
 
-  // Jackpots. WordPress needs this unconditionally; the OMP only when there are
-  // no numbers to carry the jackpot inside the result payload.
-  const jackpots = [];
-  for (const [game, row] of [['lotto', lotto], ['super6', super6]]) {
-    const jp = Number(row?.jackpot_amount);
-    if (!row || !Number.isFinite(jp) || jp <= 0) continue;
-    const won = Number(row.jackpot_winners) > 0;
-    const hasNumbers = !!row.numbers?.length;
-    const [omp, wordpress] = await Promise.all([
-      hasNumbers ? Promise.resolve({ ok: true, note: 'sent with the result' })
-                 : pushJackpot(game, jp, { jackpotWon: won }),
-      pushHexiveJackpot(game, jp),
-    ]);
-    jackpots.push({ game, jackpot: jp, omp, wordpress });
-  }
+  // Results and jackpots go out at the same time; they use different endpoints.
+  const [website, jackpots] = await Promise.all([
+    pushResultsEverywhere({ date: drawDate, daily, cashPops, lotto, super6 },
+      { deadline, force: opts.force, admin }),
+    jackpotJob,
+  ]);
 
-  if (website?.sent > 0 || jackpots.length) await markPublished(admin, drawDate);
+  if (website?.sent > 0 || website?.unchanged > 0 || jackpots.length) await markPublished(admin, drawDate);
 
   const jackpotFailures = jackpots.flatMap((j) => [
     ...(j.omp && j.omp.ok === false ? [`${j.game} jackpot (OMP): ${j.omp.error}`] : []),
@@ -60,6 +104,7 @@ export async function publishDay(admin, drawDate) {
 
   return {
     sent: website?.sent ?? 0,
+    unchanged: website?.unchanged ?? 0,
     failed: (website?.failed ?? 0) + jackpotFailures.length,
     incomplete: website?.incomplete || [],
     errors: [...(website?.errors || []), ...jackpotFailures],

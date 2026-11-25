@@ -3,6 +3,7 @@ import { LETTERS, DEFAULT_LETTER_WORDS } from '../../shared/config.js';
 import * as api from '../lib/api.js';
 import { useToast } from '../components/Toast.jsx';
 import { Ball } from '../components/Ball.jsx';
+import PublishCheck from '../components/PublishCheck.jsx';
 
 export default function SettingsView({ settings, onChanged }) {
   const toast = useToast();
@@ -34,6 +35,8 @@ export default function SettingsView({ settings, onChanged }) {
   return (
     <div className="main" style={{ maxWidth: 900 }}>
       <div className="pagehead"><h1>Settings</h1></div>
+
+      <PublishCheck />
 
       <section className="card">
         <header><h3>Sending address</h3><span className="hint">Where blasts are sent from</span></header>

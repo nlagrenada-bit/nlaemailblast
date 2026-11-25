@@ -58,6 +58,7 @@ async function jackpotFromDatabase(game, admin) {
 }
 
 export default async (request) => {
+  const startedAt = Date.now();
   if (request.method !== 'POST') return json({ error: 'Use POST.' }, 405);
 
   const auth = await requireStaff(request);
@@ -139,11 +140,12 @@ export default async (request) => {
     admin.from('super6_results').select('*').eq('draw_date', drawDate).maybeSingle().then((r) => r.data),
   ]);
 
-  const website = await pushResultsEverywhere({ date: drawDate, daily, cashPops, lotto, super6 });
+  const website = await pushResultsEverywhere({ date: drawDate, daily, cashPops, lotto, super6 },
+    { deadline: startedAt + 7000, force: !!body?.force, admin });
 
   // Sending or pushing is what makes results public. Until this runs they are
   // visible only inside the app.
-  if (website.sent > 0) await markPublished(admin, drawDate);
+  if (website.sent > 0 || website.unchanged > 0) await markPublished(admin, drawDate);
 
   // Every target unconfigured means there is nowhere to send at all.
   // Only an error when EVERY target is switched off.
@@ -175,7 +177,7 @@ export default async (request) => {
     extras.push({ game, jackpot: jp, omp: o, wordpress: w });
   }
 
-  if (website.sent === 0 && website.failed === 0 && extras.length === 0) {
+  if (website.sent === 0 && website.failed === 0 && !website.unchanged && extras.length === 0) {
     return json({
       error: `No results are entered for ${drawDate}, so there was nothing to send. `
            + `Enter the winning numbers first, or update the jackpot on its own.`,

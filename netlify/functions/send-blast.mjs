@@ -25,6 +25,9 @@ function estimateMinutes(externalCount) {
 }
 
 export default async (request) => {
+  // Netlify stops a normal function at 10 seconds. Leave room to record the
+  // outcome and answer, so the browser always gets a real reply.
+  const startedAt = Date.now();
   if (request.method !== 'POST') return json({ error: 'Use POST.' }, 405);
 
   const auth = await requireStaff(request);
@@ -115,7 +118,7 @@ export default async (request) => {
     try {
       // The same routine "update websites only" uses, so the two can never
       // drift apart again — including the jackpots.
-      website = await publishDay(admin, drawDate);
+      website = await publishDay(admin, drawDate, { deadline: startedAt + 7500, force: !!body?.force });
     } catch (e) {
       website = { sent: 0, failed: 1, errors: [e.message] };
     }
@@ -140,7 +143,10 @@ export default async (request) => {
     }).eq('id', run.id);
     return json({
       runId: run.id, mode, totalRecipients: 0, estimatedMinutes: 0,
-      website: { sent: website?.sent ?? 0, failed: website?.failed ?? 0 },
+      website: {
+        sent: website?.sent ?? 0, failed: website?.failed ?? 0, unchanged: website?.unchanged ?? 0,
+        notes: [...(website?.incomplete || []), ...(website?.errors || [])],
+      },
     }, 200);
   }
 

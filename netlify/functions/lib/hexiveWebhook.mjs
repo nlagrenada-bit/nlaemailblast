@@ -52,6 +52,8 @@ const POP_TYPE = {
 const pad2 = (n) => String(Number(n)).padStart(2, '0');
 const s    = (n) => String(Number(n));
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+// No single request may hang the whole push.
+const fetchT = (url, init = {}) => fetch(url, { signal: AbortSignal.timeout(6000), ...init });
 
 // Lotto and Super 6 publish smallest to largest. Pick 3 and Cash 4 must NOT be
 // sorted — for those games the position of each digit is the result.
@@ -147,14 +149,14 @@ export function buildHexivePayloads({ date, daily = [], cashPops = [], lotto = n
   return out;
 }
 
-async function sendOne({ game, drawId, body }) {
+async function sendOne({ game, drawId, body }, deadline = Infinity) {
   const path = PATH[game];
   if (!path) return { ok: false, game, error: `unknown game "${game}"` };
   const url = `${BASE()}/wp-json/${path}/v1/webhook`;
 
   for (let attempt = 1; attempt <= 3; attempt++) {
     try {
-      const res = await fetch(url, {
+      const res = await fetchT(url, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -166,8 +168,8 @@ async function sendOne({ game, drawId, body }) {
 
       if (res.ok) return { ok: true, game, drawId };
 
-      // 5xx and 429 are worth retrying; a 4xx is a decision.
-      if ((res.status >= 500 || res.status === 429) && attempt < 3) {
+      // 5xx and 429 are worth retrying, if there is time; a 4xx is a decision.
+      if ((res.status >= 500 || res.status === 429) && attempt < 3 && Date.now() + 1500 * attempt < deadline) {
         await sleep(1500 * attempt);
         continue;
       }
@@ -175,32 +177,85 @@ async function sendOne({ game, drawId, body }) {
       return { ok: false, game, drawId, status: res.status,
                error: `${res.status} ${String(text).replace(/\s+/g, ' ').slice(0, 180)}` };
     } catch (e) {
-      if (attempt === 3) return { ok: false, game, drawId, error: e.message };
+      if (attempt === 3 || Date.now() + 1000 * attempt > deadline) {
+        return { ok: false, game, drawId, error: e.name === 'TimeoutError' ? 'no answer within 6 seconds' : e.message };
+      }
       await sleep(1000 * attempt);
     }
   }
   return { ok: false, game, drawId, error: 'unreachable after retries' };
 }
 
+/* WordPress cannot be read back, so the app remembers what it last sent
+   successfully (table website_push_log). A draw already sent with exactly the
+   same content is not sent again. Without this, every push re-sent the whole
+   day, which late in the day took longer than Netlify allows. If the table is
+   missing, everything is sent, as before. */
+const fingerprint = (body) => JSON.stringify(body);
+
+async function alreadySent(admin, payloads) {
+  if (!admin || !payloads.length) return new Set();
+  try {
+    const { data, error } = await admin.from('website_push_log')
+      .select('game, draw_no, fingerprint').eq('target', 'wordpress')
+      .in('draw_no', [...new Set(payloads.map((p) => Number(p.drawId)))]);
+    if (error) return new Set();
+    return new Set((data || []).map((r) => `${r.game}|${r.draw_no}|${r.fingerprint}`));
+  } catch { return new Set(); }
+}
+
+async function remember(admin, sent) {
+  if (!admin || !sent.length) return;
+  try {
+    await admin.from('website_push_log').upsert(sent.map((p) => ({
+      target: 'wordpress', game: p.game, draw_no: Number(p.drawId),
+      fingerprint: fingerprint(p.body), sent_at: new Date().toISOString(),
+    })), { onConflict: 'target,game,draw_no' });
+  } catch { /* logging must never fail the push */ }
+}
+
 /**
  * Push a day's results to the WordPress site.
- * Returns { sent, failed[], results[], skipped[] }, or { notConfigured, reason }
- * when the target is switched off. `skipped` lists games that could not be
- * sent; it is ALWAYS an array, so never test it for truthiness.
+ * opts.admin     Supabase service client, to skip draws already sent identically
+ * opts.deadline  epoch ms; anything not started by then is reported, not sent
+ * opts.force     send everything regardless of the log
+ * Returns { sent, failed[], results[], skipped[], unchanged }, or
+ * { notConfigured, reason } when the target is switched off.
  */
-export async function pushResultsToHexive(doc) {
+export async function pushResultsToHexive(doc, opts = {}) {
   if (!BASE())   return { notConfigured: true, reason: 'HEXIVE_WEBHOOK_BASE not set' };
   if (!SECRET()) return { notConfigured: true, reason: 'HEXIVE_WEBHOOK_SECRET not set' };
 
+  const deadline = opts.deadline || Infinity;
   const skipped = [];
-  const payloads = buildHexivePayloads(doc, skipped);
+  const all = buildHexivePayloads(doc, skipped);
+
+  const seen = opts.force ? new Set() : await alreadySent(opts.admin, all);
+  const payloads = all.filter((p) => !seen.has(`${p.game}|${Number(p.drawId)}|${fingerprint(p.body)}`));
+  const unchanged = all.length - payloads.length;
+
+  // Each game has its own endpoint, so games go in parallel; within a game,
+  // draws stay in order so a later slot never lands before an earlier one.
+  const byGame = new Map();
+  for (const p of payloads) (byGame.get(p.game) || byGame.set(p.game, []).get(p.game)).push(p);
+
   const results = [];
-  for (const p of payloads) {
-    results.push(await sendOne(p));
-    await sleep(300);
-  }
+  await Promise.all([...byGame.values()].map(async (list) => {
+    for (const p of list) {
+      if (Date.now() > deadline) {
+        skipped.push(`${p.game} draw ${p.drawId}: not sent yet (time limit reached). Press update again to finish`);
+        continue;
+      }
+      results.push({ ...(await sendOne(p, deadline)), _p: p });
+      await sleep(150);
+    }
+  }));
+
+  await remember(opts.admin, results.filter((r) => r.ok).map((r) => r._p));
+  for (const r of results) delete r._p;
+
   const failed = results.filter((r) => !r.ok);
-  return { sent: results.length - failed.length, failed, results, skipped };
+  return { sent: results.length - failed.length, failed, results, skipped, unchanged };
 }
 
 // ---------------------------------------------------------------------------
@@ -239,7 +294,7 @@ export async function pushHexiveJackpot(game, amount) {
   const url = `${BASE()}/wp-json/${path}`;
   for (let attempt = 1; attempt <= 3; attempt++) {
     try {
-      const res = await fetch(url, {
+      const res = await fetchT(url, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

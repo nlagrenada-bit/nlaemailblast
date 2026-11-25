@@ -203,7 +203,18 @@ export async function sendBlast({
     }),
   });
   const body = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(body.error || 'The blast could not be started.');
+  if (!res.ok) {
+    if (body.error) throw new Error(body.error);
+    // No JSON answer means the server stopped before replying, almost always
+    // Netlify's 10-second limit. Say so rather than a vague "could not start".
+    if ([502, 503, 504].includes(res.status)) {
+      throw new Error(`The server took too long and was stopped (HTTP ${res.status}). `
+        + 'Some results may already be on the websites. Wait a moment, then send again: '
+        + 'anything already published is skipped, so it is safe to repeat. '
+        + 'Settings > Website publishing check shows exactly what is there.');
+    }
+    throw new Error(`The send could not be started (HTTP ${res.status}). Try again; if it repeats, run Settings > Website publishing check.`);
+  }
   return body;
 }
 
@@ -401,5 +412,16 @@ export async function setPayout(payload) {
   });
   const body = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(body.error || 'Could not save that payout.');
+  return body;
+}
+
+// ------------------------------------------------- website publishing check
+
+/** Read-only check of one day's website publishing. Without `game`: overview. */
+export async function publishCheck(date, game) {
+  const q = `date=${encodeURIComponent(date)}${game ? `&game=${encodeURIComponent(game)}` : ''}`;
+  const res = await fetch(`/api/publish-check?${q}`, { headers: await authHeader() });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(body.error || `The check could not run (HTTP ${res.status}).`);
   return body;
 }

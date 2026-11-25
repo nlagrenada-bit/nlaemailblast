@@ -55,6 +55,8 @@ const POP_TIME = {
 const JACKPOT_TIME = '19:45:00';      // lotto and super 6 both draw at 7:45pm
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+// No single request may hang the whole push.
+const fetchT = (url, init = {}) => fetch(url, { signal: AbortSignal.timeout(6000), ...init });
 
 // Lotto and Super 6 are published smallest to largest, which is the convention
 // on every lottery results page. Draw order is not meaningful for these games —
@@ -188,7 +190,7 @@ async function expectedNext(game, fresh = false) {
   const path = GAME_PATH[game] || game;
   let value = null;
   try {
-    const res = await fetch(`${BASE()}/results/${path}/next`, { headers: headers() });
+    const res = await fetchT(`${BASE()}/results/${path}/next`, { headers: headers() });
     if (res.ok) {
       const j = await res.json();
       value = Number(j.next_draw_number) || null;
@@ -198,7 +200,7 @@ async function expectedNext(game, fresh = false) {
   return value;
 }
 
-async function sendOne({ game, drawNumber, body }, { validate = false } = {}) {
+export async function sendOne({ game, drawNumber, body }, { validate = false, deadline = Infinity } = {}) {
   const path = GAME_PATH[game];
   if (!path) return { ok: false, game, error: `unknown game "${game}"` };
 
@@ -220,25 +222,25 @@ async function sendOne({ game, drawNumber, body }, { validate = false } = {}) {
       let res;
 
       if (isCorrection) {
-        res = await fetch(putUrl, {
+        res = await fetchT(putUrl, {
           method: 'PUT', headers: headers(), body: JSON.stringify(body),
         });
         if (res.ok) return { ok: true, game, drawNumber, action: 'updated' };
         // If the portal disagrees that it exists, fall through and try POST.
         if (res.status === 404) {
-          res = await fetch(postUrl, {
+          res = await fetchT(postUrl, {
             method: 'POST', headers: headers(idem), body: JSON.stringify(body),
           });
         }
       } else {
-        res = await fetch(postUrl, {
+        res = await fetchT(postUrl, {
           method: 'POST', headers: headers(idem), body: JSON.stringify(body),
         });
 
         // Already stored after all -> correct it in place. 422 is included
         // because the sequence check reports duplicates that way.
         if (res.status === 409 || res.status === 422) {
-          const put = await fetch(putUrl, {
+          const put = await fetchT(putUrl, {
             method: 'PUT', headers: headers(), body: JSON.stringify(body),
           });
           if (put.ok) return { ok: true, game, drawNumber, action: 'updated' };
@@ -256,6 +258,11 @@ async function sendOne({ game, drawNumber, body }, { validate = false } = {}) {
 
       if (res.status === 429 && attempt < 3) {
         const wait = Number(res.headers.get('retry-after') || 60) * 1000;
+        // Waiting out a throttle would outlast the request; report it instead.
+        if (Date.now() + wait > deadline) {
+          return { ok: false, game, drawNumber, status: 429,
+                   error: 'The portal is throttling requests. Wait a minute, then update again.' };
+        }
         await sleep(Math.min(wait, 65000));
         continue;
       }
@@ -274,7 +281,7 @@ async function sendOne({ game, drawNumber, body }, { validate = false } = {}) {
         return {
           ok: false, game, drawNumber, status: 422,
           error: `The portal is expecting draw ${expecting ?? '?'} for ${game}, `
-            + `not ${drawNumber}. An earlier draw has not reached it — send that first.`,
+            + `not ${drawNumber}. An earlier draw has not reached it, so send that first.`,
         };
       }
       return {
@@ -314,16 +321,76 @@ export async function pushResultsToWebsite(doc, opts = {}) {
 
   nextCache.clear();                 // fresh view of the portal for each push
   const skipped = [];
-  const payloads = buildApiPayloads(doc, skipped);
-  const results = [];
+  const all = buildApiPayloads(doc, skipped);
+  const deadline = opts.deadline || Infinity;
 
+  /* Only send what the portal does not already hold exactly.
+     Late in the day a full push is 15+ requests, each one re-sending draws
+     that were published hours earlier. That pushed the whole request past
+     Netlify's 10-second limit, the function was cut off, and the app showed
+     "The blast could not be started". One read per game tells us what is
+     already there and identical, so normally only the new draw goes out.
+     A dry run (validate) always checks everything. */
+  let payloads = all;
+  let unchanged = 0;
+  if (!opts.validate && !opts.force) {
+    const stored = await storedByGame([...new Set(all.map((p) => p.game))]);
+    payloads = all.filter((p) => {
+      const row = stored.get(p.game)?.get(Number(p.drawNumber));
+      const same = row && matchesStored(p, row);
+      if (same) unchanged++;
+      return !same;
+    });
+  }
+
+  const results = [];
   for (const p of payloads) {
-    results.push(await sendOne(p, opts));
-    await sleep(250);            // stay comfortably inside 30 requests/minute
+    if (Date.now() > deadline) {
+      skipped.push(`${p.game} draw ${p.drawNumber}: not sent yet (time limit reached). Press update again to finish`);
+      continue;
+    }
+    results.push(await sendOne(p, { ...opts, deadline }));
+    await sleep(150);            // stay comfortably inside 30 requests/minute
   }
 
   const failed = results.filter((r) => !r.ok);
-  return { sent: results.length - failed.length, failed, results, skipped };
+  return { sent: results.length - failed.length, failed, results, skipped, unchanged };
+}
+
+/** One list read per game, in parallel: Map(game -> Map(drawNumber -> row)). Failures just mean "unknown". */
+async function storedByGame(games) {
+  const out = new Map();
+  await Promise.all(games.map(async (game) => {
+    try {
+      const path = GAME_PATH[game] || game;
+      const res = await fetch(`${BASE()}/results/${path}?limit=30`, {
+        headers: headers(), signal: AbortSignal.timeout(4000),
+      });
+      if (!res.ok) return;
+      const j = await res.json();
+      const rows = Array.isArray(j) ? j
+        : ['results', 'data', path, 'items'].map((k) => j?.[k]).find(Array.isArray) || [];
+      out.set(game, new Map(rows.map((r) => [Number(r.draw_number), r])));
+    } catch { /* unknown: send it, as before */ }
+  }));
+  return out;
+}
+
+const intsOf = (v) => (Array.isArray(v) ? v : String(v ?? '').split(/[^0-9]+/))
+  .filter((x) => x !== '' && x != null).map(Number).filter(Number.isFinite);
+
+/** True when the portal's stored row already says exactly what we would send. */
+export function matchesStored(p, row) {
+  const b = p.body;
+  const ours = b.winning_number != null ? [Number(b.winning_number)] : intsOf(b.winning_numbers);
+  const theirs = intsOf(row.winning_numbers ?? row.winning_number);
+  if (ours.length !== theirs.length || ours.some((x, i) => x !== theirs[i])) return false;
+  const up = (x) => String(x ?? '').trim().toUpperCase();
+  if ('winning_letter' in b && up(b.winning_letter) !== up(row.winning_letter)) return false;
+  if ('multiplier' in b && up(b.multiplier) !== up(row.multiplier)) return false;
+  if ('draw_period' in b && row.draw_period != null && up(b.draw_period) !== up(row.draw_period)) return false;
+  if (b.jackpot != null && Number(row.jackpot) !== Number(b.jackpot)) return false;
+  return true;
 }
 
 /** Dry run: full validation on the portal, nothing written. */
@@ -334,7 +401,7 @@ export const validateResultsWithWebsite = (doc) =>
 export async function nextExpected(game) {
   if (!BASE()) return { notConfigured: true };
   const path = GAME_PATH[game];
-  const res = await fetch(`${BASE()}/results/${path}/next`, { headers: headers() });
+  const res = await fetchT(`${BASE()}/results/${path}/next`, { headers: headers() });
   return res.ok ? res.json() : { error: `${res.status} ${await res.text().catch(() => '')}` };
 }
 
@@ -358,7 +425,7 @@ export async function nextExpected(game) {
  */
 async function readStoredDraw(game, drawNumber) {
   const path = GAME_PATH[game] || game;
-  const res = await fetch(`${BASE()}/results/${path}?limit=10`, { headers: headers() });
+  const res = await fetchT(`${BASE()}/results/${path}?limit=10`, { headers: headers() });
   if (!res.ok) {
     return { ok: false, error: `Could not read the stored ${game} draw (${res.status}).` };
   }
@@ -392,7 +459,7 @@ async function readStoredDraw(game, drawNumber) {
 /** Read what the portal currently holds for a game. */
 export async function lastStored(game) {
   const path = GAME_PATH[game] || game;
-  const res = await fetch(`${BASE()}/results/${path}/next`, { headers: headers() });
+  const res = await fetchT(`${BASE()}/results/${path}/next`, { headers: headers() });
   if (!res.ok) {
     return { ok: false, error: `${res.status} ${await res.text().catch(() => '')}`.slice(0, 200) };
   }
@@ -456,7 +523,7 @@ export async function pushJackpot(game, amount, opts = {}) {
   if (opts.jackpotWon) body.jackpot_reset = true;
 
   const path = GAME_PATH[game] || game;
-  const res = await fetch(`${BASE()}/results/${path}/${info.lastDrawNumber}`, {
+  const res = await fetchT(`${BASE()}/results/${path}/${info.lastDrawNumber}`, {
     method: 'PUT', headers: headers(), body: JSON.stringify(body),
   });
 

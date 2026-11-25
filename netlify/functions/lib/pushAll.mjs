@@ -12,10 +12,10 @@
 import { pushResultsToWebsite } from './websiteWebhook.mjs';
 import { pushResultsToHexive } from './hexiveWebhook.mjs';
 
-export async function pushResultsEverywhere(doc) {
+export async function pushResultsEverywhere(doc, opts = {}) {
   const [omp, wp] = await Promise.allSettled([
-    pushResultsToWebsite(doc),
-    pushResultsToHexive(doc),
+    pushResultsToWebsite(doc, { deadline: opts.deadline, force: opts.force }),
+    pushResultsToHexive(doc, { deadline: opts.deadline, force: opts.force, admin: opts.admin }),
   ]);
 
   const unwrap = (r, name) =>
@@ -47,5 +47,6 @@ export async function pushResultsEverywhere(doc) {
     }
   }
 
-  return { sent, failed, skipped: notConfigured, incomplete, errors, targets };
+  const unchanged = Object.values(targets).reduce((n, t) => n + (t.unchanged || 0), 0);
+  return { sent, failed, skipped: notConfigured, incomplete, errors, targets, unchanged };
 }
