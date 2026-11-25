@@ -10,7 +10,7 @@
 // per minute.
 
 import { requireStaff } from './lib/supabaseAdmin.mjs';
-import { overview, checkOmpGame, GAMES } from './lib/publishCheck.mjs';
+import { overview, checkOmpGame, GAMES, wordpressTestSend, wordpressResendDay } from './lib/publishCheck.mjs';
 
 const json = (b, s = 200) =>
   new Response(JSON.stringify(b, null, 2), {
@@ -18,10 +18,27 @@ const json = (b, s = 200) =>
   });
 
 export default async (request) => {
-  if (request.method !== 'GET') return json({ error: 'Use GET.' }, 405);
-
   const auth = await requireStaff(request);
   if (auth.error) return json({ error: auth.error }, auth.status);
+
+  // POST = the two actions that really send to WordPress. Approver/admin only.
+  if (request.method === 'POST') {
+    if (!['approver', 'admin'].includes(auth.staff.role)) {
+      return json({ error: 'Only an approver or admin can send to the website.' }, 403);
+    }
+    let b = {};
+    try { b = await request.json(); } catch { /* empty */ }
+    const d = String(b.date || '').trim();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) return json({ error: 'date=YYYY-MM-DD is required.' }, 400);
+    try {
+      if (b.action === 'wp-test') return json({ lines: await wordpressTestSend(auth.db, d) });
+      if (b.action === 'wp-resend') return json({ lines: await wordpressResendDay(auth.db, d) });
+      return json({ error: 'Unknown action.' }, 400);
+    } catch (e) {
+      return json({ error: `The action failed: ${e.message}` }, 500);
+    }
+  }
+  if (request.method !== 'GET') return json({ error: 'Use GET or POST.' }, 405);
 
   const url = new URL(request.url);
   const date = (url.searchParams.get('date') || '').trim();

@@ -65,8 +65,37 @@ export function networkReason(e, url) {
   return `${host}: ${e?.cause?.message || e?.message || 'network error'}${code ? ` (${code})` : ''}`;
 }
 
+
+/**
+ * Decide whether a 2xx reply really means "stored".
+ * Returns { ok, reply, error, siteWide }.
+ */
+export function judgeReply(text, res) {
+  const short = String(text || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 200);
+  const type = res?.headers?.get?.('content-type') || '';
+  if (res?.redirected) {
+    return { ok: false, siteWide: true,
+      error: `${res.status} redirected to ${res.url}, so nothing was stored. Check HEXIVE_WEBHOOK_BASE (exact host, https, www).` };
+  }
+  let j = null;
+  try { j = JSON.parse(text); } catch { /* not JSON */ }
+  if (!j) {
+    if (!String(text || '').trim()) return { ok: true, reply: '(empty reply)' };
+    return { ok: false, siteWide: true,
+      error: `${res?.status} the site answered with a web page (${type || 'not JSON'}), not the webhook. Likely a cache, firewall or redirect: "${short.slice(0, 120)}"` };
+  }
+  const failed = j.success === false || j.status === 'error' || j.ok === false
+    || (j.code && j.data?.status >= 400) || (typeof j.error === 'string' && j.error);
+  if (failed) {
+    const msg = j.message || j.error || j.code || JSON.stringify(j).slice(0, 160);
+    const wide = /secret|unauthori|forbidden|invalid.*(key|token)|signature/i.test(String(msg));
+    return { ok: false, siteWide: wide, error: `${res?.status} site refused it: ${msg}` };
+  }
+  return { ok: true, reply: JSON.stringify(j).slice(0, 200) };
+}
+
 /** A failure that will be the same for every request to this site. */
-const siteWide = (r) => r && !r.ok && (r.network || r.status === 401 || r.status === 403 || r.status === 404);
+const siteWide = (r) => r && !r.ok && (r.network || r.siteWideReply || r.status === 401 || r.status === 403 || r.status === 404);
 
 // No single request may hang the whole push.
 const fetchT = (url, init = {}) => fetch(url, { signal: AbortSignal.timeout(6000), ...init });
@@ -182,7 +211,16 @@ async function sendOne({ game, drawId, body }, deadline = Infinity) {
         body: JSON.stringify(body),
       });
 
-      if (res.ok) return { ok: true, game, drawId };
+      if (res.ok) {
+        // A 200 is not proof the site stored it. A redirect to a page, a
+        // cache or firewall page, or a plugin answering {"success":false}
+        // all come back as 200. Only a JSON answer that does not report a
+        // failure counts as stored.
+        const text = await res.text().catch(() => '');
+        const verdict = judgeReply(text, res);
+        if (verdict.ok) return { ok: true, game, drawId, reply: verdict.reply };
+        return { ok: false, game, drawId, status: res.status, siteWideReply: verdict.siteWide, error: verdict.error };
+      }
 
       // 5xx and 429 are worth retrying, if there is time; a 4xx is a decision.
       if ((res.status >= 500 || res.status === 429) && attempt < 3 && Date.now() + 1500 * attempt < deadline) {
@@ -341,7 +379,11 @@ export async function pushHexiveJackpot(game, amount) {
         },
         body: JSON.stringify({ estimated_jackpot: jp }),
       });
-      if (res.ok) return { ok: true, game, jackpot: jp };
+      if (res.ok) {
+        const verdict = judgeReply(await res.text().catch(() => ''), res);
+        if (verdict.ok) return { ok: true, game, jackpot: jp, reply: verdict.reply };
+        return { ok: false, game, status: res.status, error: verdict.error };
+      }
       if ((res.status >= 500 || res.status === 429) && attempt < 3) {
         await sleep(1500 * attempt);
         continue;

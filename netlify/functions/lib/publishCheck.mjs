@@ -16,7 +16,7 @@
 //     run, so the secret itself can only be proven by a real send.
 
 import { buildApiPayloads, sendOne } from './websiteWebhook.mjs';
-import { buildHexivePayloads } from './hexiveWebhook.mjs';
+import { buildHexivePayloads, judgeReply, networkReason, pushResultsToHexive } from './hexiveWebhook.mjs';
 import { loadDay } from './publishDay.mjs';
 
 const OMP_BASE   = () => (process.env.WEBSITE_API_BASE || '').trim().replace(/\/$/, '');
@@ -283,7 +283,7 @@ export async function overview(admin, drawDate) {
   // ---- 4. what happened on the last pushes for this day ---------------
   try {
     const { data: runs } = await admin.from('blast_runs')
-      .select('started_at, mode, status, website_sent, website_failed, website_note, scope_kind, failed_count')
+      .select('*')
       .eq('draw_date', drawDate).order('started_at', { ascending: false }).limit(5);
     for (const r of runs || []) {
       const when = r.started_at ? new Date(r.started_at).toLocaleString('en-GB', { timeZone: 'America/Grenada' }) : '';
@@ -297,7 +297,7 @@ export async function overview(admin, drawDate) {
       const sent = r.website_sent;
       history.push(line(failed > 0 ? 'fail' : 'pass',
         `${when}: ${kind}`,
-        [sent != null ? `${sent} sent` : null, failed ? `${failed} failed` : null, r.website_note || null]
+        [sent != null ? `${sent} sent` : null, r.website_unchanged ? `${r.website_unchanged} already up to date (not resent)` : null, failed ? `${failed} failed` : null, r.website_note && !/^Started in the background/.test(r.website_note) ? r.website_note : null]
           .filter(Boolean).join('. ')));
     }
     if (!runs?.length) history.push(line('info', 'No sends or website updates recorded for this day', ''));
@@ -430,4 +430,71 @@ function hintFor(err) {
   if (/^401/.test(err)) return 'The token was refused. Update WEBSITE_API_TOKEN in Netlify.';
   if (/^403/.test(err)) return 'Not allowed: IP allowlist or token scope. Ask the portal admin.';
   return '';
+}
+
+// ---------------------------------------------------------------- WordPress, real send
+
+
+/**
+ * One REAL send to WordPress: the latest draw of the day, with exactly the
+ * values already published, so it changes nothing visible if it works. It
+ * reports everything about the reply, which is the only way to prove the
+ * secret and to see what the site actually does with a post.
+ */
+export async function wordpressTestSend(admin, drawDate) {
+  const out = [];
+  if (!WP_BASE() || !WP_SECRET()) return [line('fail', 'WordPress is not configured in Netlify')];
+  const day = await loadDay(admin, drawDate);
+  const payloads = buildHexivePayloads({ date: drawDate, ...day }, []);
+  if (!payloads.length) return [line('fail', `Nothing complete for ${drawDate} to test with`)];
+  const p = payloads[payloads.length - 1];
+  const PATHS = { super6: 'super6', lotto: 'lotto', cash4: 'cash4', pick3: 'pick3', cash_pop: 'cashpop', play_way: 'playway' };
+  const url = `${WP_BASE()}/wp-json/${PATHS[p.game]}/v1/webhook`;
+
+  out.push(line('info', `Sent ${GAME_LABEL[p.game]} draw ${p.drawId} to ${url}`, JSON.stringify(p.body)));
+  let res; let text = '';
+  try {
+    res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Webhook-Secret': WP_SECRET(), Accept: 'application/json' },
+      body: JSON.stringify(p.body),
+      signal: AbortSignal.timeout(15000),
+    });
+    text = await res.text().catch(() => '');
+  } catch (e) {
+    out.push(line('fail', 'Could not connect', networkReason(e, url)));
+    return out;
+  }
+  const v = judgeReply(text, res);
+  out.push(line(res.redirected ? 'fail' : 'info', `HTTP ${res.status}${res.redirected ? `, REDIRECTED to ${res.url}` : ''}`,
+    `Content type: ${res.headers.get('content-type') || 'none'}. Server: ${res.headers.get('server') || '?'}.`));
+  out.push(line('info', 'What the site replied', short(text, 400) || '(empty)'));
+  out.push(v.ok
+    ? line('pass', 'WordPress accepted it', 'Check the home page now: this draw should show. If it does not, the plugin is accepting posts without storing them, or the page is cached. Send this report to the developer.')
+    : line('fail', 'WordPress did NOT store it', v.error,
+      /secret|unauthori|forbidden/i.test(v.error) ? 'The secret is wrong. Get the current one from the developer and update HEXIVE_WEBHOOK_SECRET in Netlify, then redeploy.'
+        : /redirect/i.test(v.error) ? 'Set HEXIVE_WEBHOOK_BASE to exactly the address it redirected to (shown above), without the /wp-json part, then redeploy.'
+          : 'Send this report to the developer.'));
+  return out;
+}
+
+/** Forget what was sent to WordPress for this day, and send the whole day again. */
+export async function wordpressResendDay(admin, drawDate) {
+  const day = await loadDay(admin, drawDate);
+  const payloads = buildHexivePayloads({ date: drawDate, ...day }, []);
+  const nums = [...new Set(payloads.map((p) => Number(p.drawId)))];
+  if (nums.length) {
+    await admin.from('website_push_log').delete().eq('target', 'wordpress').in('draw_no', nums);
+  }
+  const r = await pushResultsToHexive({ date: drawDate, ...day }, { admin, force: true });
+  if (r.notConfigured) return [line('fail', 'WordPress is not configured', r.reason)];
+  const lines = [line(r.failed.length ? 'fail' : 'pass',
+    `Resent ${r.results.length} draw(s) to WordPress: ${r.sent} stored, ${r.failed.length} failed`)];
+  const seen = new Set();
+  for (const f of r.failed) {
+    if (seen.has(f.error)) continue;
+    seen.add(f.error);
+    lines.push(line('fail', `${GAME_LABEL[f.game] || f.game} draw ${f.drawId}`, f.error));
+  }
+  return lines;
 }

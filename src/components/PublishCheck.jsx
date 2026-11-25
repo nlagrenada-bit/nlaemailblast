@@ -79,9 +79,11 @@ export default function PublishCheck() {
   const [report, setReport] = useState(null);   // { overview, games: {game: lines} }
   const [error, setError] = useState('');
   const [copied, setCopied] = useState(false);
+  const [wpLines, setWpLines] = useState(null);
+  const [wpBusy, setWpBusy] = useState('');
 
   async function run() {
-    setRunning(true); setError(''); setReport(null); setCopied(false);
+    setRunning(true); setError(''); setReport(null); setCopied(false); setWpLines(null);
     try {
       setStep('Checking settings, the day’s results and the WordPress site…');
       const ov = await api.publishCheck(date);
@@ -119,10 +121,21 @@ export default function PublishCheck() {
     ['3. OMP portal (about.nla.gd)', ompLines],
     ['4. WordPress site', s.wordpress],
     ['5. Recent sends for this day', s.history],
+    ...(wpLines ? [['6. WordPress real send', wpLines]] : []),
   ] : [];
   const all = groups.flatMap(([, l]) => l || []);
   const fails = all.filter((l) => l.status === 'fail').length;
   const warns = all.filter((l) => l.status === 'warn').length;
+
+  async function wpAction(action) {
+    if (action === 'wp-resend' && !window.confirm(
+      `Send every result for ${date} to the WordPress site again?\n\nUse this when the site is missing draws that the app shows as sent. Results already there are simply overwritten with the same values.`)) return;
+    setWpBusy(action); setError('');
+    try {
+      const r = await api.publishAction(date, action);
+      setWpLines(r.lines || []);
+    } catch (e) { setError(e.message); } finally { setWpBusy(''); }
+  }
 
   async function copy() {
     try {
@@ -172,6 +185,26 @@ export default function PublishCheck() {
         )}
 
         {groups.map(([title, lines]) => <Group key={title} title={title} lines={lines} />)}
+
+        {report && !running && (
+          <div style={{ marginTop: 18, paddingTop: 14, borderTop: '1px solid var(--line, #e5e9f0)' }}>
+            <h4 style={{ margin: '0 0 6px', fontSize: 14 }}>WordPress: real send</h4>
+            <p style={{ margin: '0 0 10px', fontSize: 12.5, color: 'var(--ink-2)', lineHeight: 1.55 }}>
+              The check above cannot prove WordPress stored anything. <strong>Test</strong> sends the latest
+              draw of this day again, with the same values, and shows exactly what the site replied.
+              {' '}<strong>Resend the day</strong> sends every result for this day to WordPress again, even
+              ones the app thinks are already there. Both are approver/admin only.
+            </p>
+            <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
+              <button className="btn" onClick={() => wpAction('wp-test')} disabled={!!wpBusy}>
+                {wpBusy === 'wp-test' ? 'Sending\u2026' : 'Test WordPress with one real send'}
+              </button>
+              <button className="btn" onClick={() => wpAction('wp-resend')} disabled={!!wpBusy}>
+                {wpBusy === 'wp-resend' ? 'Resending\u2026' : 'Resend this day to WordPress'}
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </section>
   );

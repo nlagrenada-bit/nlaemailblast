@@ -425,3 +425,15 @@ export async function publishCheck(date, game) {
   if (!res.ok) throw new Error(body.error || `The check could not run (HTTP ${res.status}).`);
   return body;
 }
+
+/** 'wp-test' (one real send) or 'wp-resend' (resend the whole day to WordPress). */
+export async function publishAction(date, action) {
+  const res = await fetch('/api/publish-check', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', ...(await authHeader()) },
+    body: JSON.stringify({ date, action }),
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(body.error || `That could not run (HTTP ${res.status}).`);
+  return body;
+}
