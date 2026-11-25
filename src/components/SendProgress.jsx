@@ -33,13 +33,9 @@ export default function SendProgress({ run, onDone, onDismiss }) {
     setLive(null);
     setFinished(false);
 
-    // Website-only finishes inside the request, so there is nothing to poll.
-    if (run.action === 'website') {
-      setFinished(true);
-      onDone?.();
-      return undefined;
-    }
-
+    // Website-only usually finishes in the background now, so it is watched
+    // like any other run. If it already finished inside the request, the
+    // first poll sees it complete and settles at once.
     let stop = false;
     api.watchBlastRun(run.id, (r) => { if (!stop) setLive(r); })
       .then((final) => {
@@ -60,7 +56,17 @@ export default function SendProgress({ run, onDone, onDismiss }) {
   const failed = live?.failed_count ?? 0;
   const pct = total ? Math.min(100, Math.round((sent / total) * 100)) : 0;
 
-  const web = run.website;
+  // The website result arrives in one of two ways: in the send response
+  // (pushed inside the request) or on the run row once the background push
+  // finishes. Prefer the row when it has an answer, since it is the latest.
+  const web = live?.website_done_at
+    ? {
+        sent: live.website_sent ?? 0,
+        failed: live.website_failed ?? 0,
+        unchanged: live.website_unchanged ?? run.website?.unchanged ?? 0,
+        notes: run.website?.notes,
+      }
+    : run.website;
   const doesWeb = run.action === 'both' || run.action === 'website';
   const doesMail = run.action === 'both' || run.action === 'email';
 

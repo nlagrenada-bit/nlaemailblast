@@ -63,22 +63,25 @@ export default async (request) => {
   const groupIds = body?.groupIds || null;
   const explicit = body?.emails || null;
 
-  let recipients;
-  if (explicit?.length) {
-    const { data } = await admin.from('recipients')
-      .select('email').in('email', explicit)
-      .eq('active', true).eq('unsubscribed', false).is('bounced_at', null);
-    recipients = (data || []).map((r) => r.email);
-  } else {
-    let { data: people } = await admin.from('recipients')
-      .select('email, recipient_group_members(group_id)')
-      .eq('active', true).eq('unsubscribed', false).is('bounced_at', null);
-    if (groupIds?.length) {
-      const want = new Set(groupIds);
-      people = (people || []).filter((p) =>
-        (p.recipient_group_members || []).some((m) => want.has(m.group_id)));
+  // Website-only needs no audience, so it skips the lookup entirely.
+  let recipients = [];
+  if (wantsEmail) {
+    if (explicit?.length) {
+      const { data } = await admin.from('recipients')
+        .select('email').in('email', explicit)
+        .eq('active', true).eq('unsubscribed', false).is('bounced_at', null);
+      recipients = (data || []).map((r) => r.email);
+    } else {
+      let { data: people } = await admin.from('recipients')
+        .select('email, recipient_group_members(group_id)')
+        .eq('active', true).eq('unsubscribed', false).is('bounced_at', null);
+      if (groupIds?.length) {
+        const want = new Set(groupIds);
+        people = (people || []).filter((p) =>
+          (p.recipient_group_members || []).some((m) => want.has(m.group_id)));
+      }
+      recipients = (people || []).map((p) => p.email);
     }
-    recipients = (people || []).map((p) => p.email);
   }
   recipients = [...new Set(recipients)];
 
@@ -107,60 +110,78 @@ export default async (request) => {
   }).select().single();
   if (runErr) return json({ error: runErr.message }, 500);
 
-  /* WEBSITES FIRST.
-     The public sites are the record of the result, and a website push takes a
-     few seconds while an email run takes a minute or more. Doing it first means
-     the results are public the moment the operator commits, rather than after
-     the last media house has been emailed — and a problem with the websites is
-     known before sixty emails have gone out, not after. */
-  let website = null;
+  // The audience goes in first, so the email can start the moment the
+  // websites are done, wherever that happens.
+  if (wantsEmail) {
+    const { error: recErr } = await admin.from('blast_recipients')
+      .insert(rows.map((r) => ({ run_id: run.id, email: r.email, is_internal: r.is_internal })));
+    if (recErr) {
+      await admin.from('blast_runs').update({ status: 'failed', error_message: recErr.message })
+        .eq('id', run.id);
+      return json({ error: recErr.message }, 500);
+    }
+  }
+
+  const base = process.env.URL || `https://${request.headers.get('host')}`;
+  const accepted = {
+    runId: run.id, mode,
+    totalRecipients: rows.length,
+    externalRecipients: externalCount,
+    estimatedMinutes: wantsEmail ? estimateMinutes(externalCount) : 0,
+  };
+
+  /* WEBSITES FIRST, IN THE BACKGROUND.
+     The public sites are the record of the result, so they go before the
+     email. The push runs in a background function, which may take up to 15
+     minutes, instead of inside this request, which Netlify stops at 10
+     seconds. A slow or unreachable site can therefore no longer leave draws
+     unsent or cut the request off. The background function starts the email
+     itself once the websites are done, so the order is kept.
+
+     Background functions need a Netlify Pro plan. If it is not accepted (202),
+     the push runs here instead, inside a time limit, as before. */
   if (wantsWebsite) {
+    let bgAccepted = false;
     try {
-      // The same routine "update websites only" uses, so the two can never
-      // drift apart again — including the jackpots.
+      const r = await fetch(`${base}/.netlify/functions/publish-day-background`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ runId: run.id, drawDate, force: !!body?.force, thenEmail: wantsEmail }),
+        signal: AbortSignal.timeout(3000),
+      });
+      bgAccepted = r.status === 202;
+    } catch { /* not accepted: fall back below */ }
+
+    if (bgAccepted) return json({ ...accepted, website: null, background: true }, 202);
+
+    let website;
+    try {
       website = await publishDay(admin, drawDate, { deadline: startedAt + 7500, force: !!body?.force });
     } catch (e) {
-      website = { sent: 0, failed: 1, errors: [e.message] };
+      website = { sent: 0, failed: 1, unchanged: 0, errors: [e.message], incomplete: [] };
     }
-
-    const note = [
-      ...(website?.incomplete || []).map((x) => `Not sent: ${x}`),
-      ...(website?.errors || []),
-    ].join(' | ') || null;
-
+    const notes = [...(website?.incomplete || []), ...(website?.errors || [])];
     await admin.from('blast_runs').update({
       website_sent: website?.sent ?? 0,
       website_failed: website?.failed ?? 0,
-      website_note: note,
+      website_note: notes.map((x, i) => (i < (website?.incomplete || []).length ? `Not sent: ${x}` : x)).join(' | ') || null,
       website_done_at: new Date().toISOString(),
     }).eq('id', run.id);
-  }
+    accepted.website = {
+      sent: website?.sent ?? 0, failed: website?.failed ?? 0,
+      unchanged: website?.unchanged ?? 0, notes,
+    };
 
-  // Website only: nothing to email, so the run is finished.
-  if (!wantsEmail) {
-    await admin.from('blast_runs').update({
-      status: 'complete', finished_at: new Date().toISOString(),
-    }).eq('id', run.id);
-    return json({
-      runId: run.id, mode, totalRecipients: 0, estimatedMinutes: 0,
-      website: {
-        sent: website?.sent ?? 0, failed: website?.failed ?? 0, unchanged: website?.unchanged ?? 0,
-        notes: [...(website?.incomplete || []), ...(website?.errors || [])],
-      },
-    }, 200);
-  }
-
-  const { error: recErr } = await admin.from('blast_recipients')
-    .insert(rows.map((r) => ({ run_id: run.id, email: r.email, is_internal: r.is_internal })));
-  if (recErr) {
-    await admin.from('blast_runs').update({ status: 'failed', error_message: recErr.message })
-      .eq('id', run.id);
-    return json({ error: recErr.message }, 500);
+    if (!wantsEmail) {
+      await admin.from('blast_runs').update({
+        status: 'complete', finished_at: new Date().toISOString(),
+      }).eq('id', run.id);
+      return json(accepted, 200);
+    }
   }
 
   // Start the chain. Awaited briefly so the invocation reliably leaves before
   // this function returns; the slice keeps running server-side regardless.
-  const base = process.env.URL || `https://${request.headers.get('host')}`;
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), 3000);
   await fetch(`${base}/api/send-blast-slice`, {
@@ -171,17 +192,7 @@ export default async (request) => {
   }).catch(() => {});
   clearTimeout(t);
 
-  return json({
-    runId: run.id,
-    mode,
-    totalRecipients: rows.length,
-    externalRecipients: externalCount,
-    estimatedMinutes: estimateMinutes(externalCount),
-    website: website ? {
-      sent: website.sent ?? 0, failed: website.failed ?? 0, unchanged: website.unchanged ?? 0,
-      notes: [...(website.incomplete || []), ...(website.errors || [])],
-    } : null,
-  }, 202);
+  return json(accepted, 202);
 };
 
 export const config = { path: '/api/send-blast' };

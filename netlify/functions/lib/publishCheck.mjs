@@ -204,6 +204,11 @@ export async function overview(admin, drawDate) {
       `HEXIVE_WEBHOOK_BASE is "${WP_BASE()}". The app adds /wp-json/... itself, so it would be doubled.`,
       'Set it to the bare site address, e.g. https://www.hexivedev.com'));
   }
+  if (/hexivedev\.com/i.test(WP_BASE())) {
+    config.push(line('fail', 'WordPress address points at the old site',
+      `HEXIVE_WEBHOOK_BASE is "${WP_BASE()}". The WordPress site moved to www.nla.gd in November 2026, so everything sent to the old address is lost.`,
+      'Netlify > Site configuration > Environment variables: set HEXIVE_WEBHOOK_BASE to https://www.nla.gd, then redeploy. Ask the developer whether the webhook secret changed with the move.'));
+  }
   if (/\s/.test(process.env.WEBSITE_API_TOKEN || '') || /\s/.test(process.env.HEXIVE_WEBHOOK_SECRET || '')) {
     config.push(line('warn', 'A token or secret has spaces or a line break around it',
       'This often happens when pasting. The check trims it, but re-paste it cleanly in Netlify.', ''));

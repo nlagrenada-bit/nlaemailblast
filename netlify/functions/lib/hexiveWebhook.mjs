@@ -52,6 +52,22 @@ const POP_TYPE = {
 const pad2 = (n) => String(Number(n)).padStart(2, '0');
 const s    = (n) => String(Number(n));
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+/** Node's fetch only says "fetch failed"; the real reason is on e.cause. */
+export function networkReason(e, url) {
+  const host = (() => { try { return new URL(url).host; } catch { return url; } })();
+  const code = e?.cause?.code || e?.code || '';
+  if (e?.name === 'TimeoutError' || e?.name === 'AbortError') return `${host} did not answer within 6 seconds`;
+  if (code === 'ENOTFOUND' || code === 'EAI_AGAIN') return `${host} could not be found (DNS). If the site moved, update HEXIVE_WEBHOOK_BASE in Netlify`;
+  if (code === 'ECONNREFUSED') return `${host} refused the connection (server down or wrong address)`;
+  if (code === 'ECONNRESET' || code === 'UND_ERR_SOCKET') return `${host} dropped the connection (often a firewall)`;
+  if (/CERT|SSL|TLS|ERR_TLS/i.test(code + ' ' + (e?.cause?.message || ''))) return `${host} has an SSL certificate problem (${code || e?.cause?.message})`;
+  return `${host}: ${e?.cause?.message || e?.message || 'network error'}${code ? ` (${code})` : ''}`;
+}
+
+/** A failure that will be the same for every request to this site. */
+const siteWide = (r) => r && !r.ok && (r.network || r.status === 401 || r.status === 403 || r.status === 404);
+
 // No single request may hang the whole push.
 const fetchT = (url, init = {}) => fetch(url, { signal: AbortSignal.timeout(6000), ...init });
 
@@ -177,8 +193,12 @@ async function sendOne({ game, drawId, body }, deadline = Infinity) {
       return { ok: false, game, drawId, status: res.status,
                error: `${res.status} ${String(text).replace(/\s+/g, ' ').slice(0, 180)}` };
     } catch (e) {
-      if (attempt === 3 || Date.now() + 1000 * attempt > deadline) {
-        return { ok: false, game, drawId, error: e.name === 'TimeoutError' ? 'no answer within 6 seconds' : e.message };
+      // DNS, refused or certificate failures will not fix themselves in a
+      // second, so do not retry those; only a timeout or a dropped connection.
+      const code = e?.cause?.code || '';
+      const permanent = ['ENOTFOUND', 'ECONNREFUSED'].includes(code) || /CERT|TLS/i.test(code);
+      if (permanent || attempt === 3 || Date.now() + 1000 * attempt > deadline) {
+        return { ok: false, game, drawId, network: true, error: networkReason(e, url) };
       }
       await sleep(1000 * attempt);
     }
@@ -240,6 +260,24 @@ export async function pushResultsToHexive(doc, opts = {}) {
   for (const p of payloads) (byGame.get(p.game) || byGame.set(p.game, []).get(p.game)).push(p);
 
   const results = [];
+
+  /* Probe with ONE request first. If the site is unreachable or refuses the
+     secret, every other request would fail the same way, and trying each one
+     just burns time. Say it once, clearly, and stop. */
+  const first = payloads[0];
+  if (first) {
+    const r = await sendOne(first, deadline);
+    results.push({ ...r, _p: first });
+    const list = byGame.get(first.game);
+    list.shift();
+    if (!list.length) byGame.delete(first.game);
+    if (siteWide(r)) {
+      const rest = [...byGame.values()].flat();
+      for (const p of rest) results.push({ ok: false, game: p.game, drawId: p.drawId, siteDown: true, error: r.error });
+      byGame.clear();
+    }
+  }
+
   await Promise.all([...byGame.values()].map(async (list) => {
     for (const p of list) {
       if (Date.now() > deadline) {
@@ -312,7 +350,10 @@ export async function pushHexiveJackpot(game, amount) {
       return { ok: false, game, status: res.status,
                error: `${res.status} ${String(text).replace(/\s+/g, ' ').slice(0, 180)}` };
     } catch (e) {
-      if (attempt === 3) return { ok: false, game, error: e.message };
+      const code = e?.cause?.code || '';
+      if (attempt === 3 || ['ENOTFOUND', 'ECONNREFUSED'].includes(code)) {
+        return { ok: false, game, network: true, error: networkReason(e, url) };
+      }
       await sleep(1000 * attempt);
     }
   }
